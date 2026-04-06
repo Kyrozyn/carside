@@ -51,6 +51,7 @@ data class DashboardUiState(
     val mapBearingDegrees: Float,
     val shortcutPackages: List<String?>,
     val shortcutPickerSlot: Int?,
+    val weatherDetailsOpen: Boolean,
     val browseOpen: Boolean,
     val locationPermissionGranted: Boolean,
     /** Lokasi terakhir dari Fused Location — untuk peta mengikuti posisi Anda. */
@@ -72,6 +73,7 @@ class DashboardViewModel(
     private val _isOnline = MutableStateFlow(false)
     private val _userLocation = MutableStateFlow<GeoLocation?>(null)
     private val _shortcutPickerSlot = MutableStateFlow<Int?>(null)
+    private val _weatherDetailsOpen = MutableStateFlow(false)
     private var weatherFetchJob: Job? = null
     private var lastWeatherFetchLocation: GeoLocation? = null
     private var lastWeatherFetchAtMs: Long = 0L
@@ -93,16 +95,21 @@ class DashboardViewModel(
             container.mediaController.playbackState,
             _weather,
             _clock,
+        ) { media, weather, clock ->
+            Triple(media, weather, clock)
+        },
+        combine(
             shortcutPackages,
             _shortcutPickerSlot,
-        ) { media, weather, clock, shortcuts, pickerSlot ->
-            Quintuple(media, weather, clock, shortcuts, pickerSlot)
+            _weatherDetailsOpen,
+        ) { shortcuts, pickerSlot, weatherOpen ->
+            Triple(shortcuts, pickerSlot, weatherOpen)
         },
         combine(_compass, _browseOpen, _locationPermission, mapRotationMode) { compass, browse, perm, useGps ->
             Quadruple(compass, browse, perm, useGps)
         },
         _userLocation,
-    ) { mediaClock, compassBrowsePermMode, userLoc ->
+    ) { mediaClock, shortcutsState, compassBrowsePermMode, userLoc ->
         val compass = compassBrowsePermMode.first
         val mode = if (compassBrowsePermMode.fourth) MapRotationMode.FORWARD_GPS else MapRotationMode.COMPASS
         val mapBearing = when (mode) {
@@ -116,8 +123,9 @@ class DashboardViewModel(
             compass = compass,
             mapRotationMode = mode,
             mapBearingDegrees = normalizeBearing(mapBearing),
-            shortcutPackages = mediaClock.fourth,
-            shortcutPickerSlot = mediaClock.fifth,
+            shortcutPackages = shortcutsState.first,
+            shortcutPickerSlot = shortcutsState.second,
+            weatherDetailsOpen = shortcutsState.third,
             browseOpen = compassBrowsePermMode.second,
             locationPermissionGranted = compassBrowsePermMode.third,
             userLocation = userLoc,
@@ -134,6 +142,7 @@ class DashboardViewModel(
             mapBearingDegrees = 0f,
             shortcutPackages = List(4) { null },
             shortcutPickerSlot = null,
+            weatherDetailsOpen = false,
             browseOpen = false,
             locationPermissionGranted = false,
             userLocation = null,
@@ -229,6 +238,14 @@ class DashboardViewModel(
         _shortcutPickerSlot.value = null
     }
 
+    fun openWeatherDetails() {
+        _weatherDetailsOpen.value = true
+    }
+
+    fun closeWeatherDetails() {
+        _weatherDetailsOpen.value = false
+    }
+
     fun onPlayPause() {
         val playing = container.mediaController.playbackState.value.isPlaying
         if (playing) container.mediaController.pause() else container.mediaController.play()
@@ -308,3 +325,4 @@ private data class Quintuple<A, B, C, D, E>(
     val fourth: D,
     val fifth: E,
 )
+

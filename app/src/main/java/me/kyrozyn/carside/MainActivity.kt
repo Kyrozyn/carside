@@ -188,6 +188,8 @@ class MainActivity : ComponentActivity() {
                         onOpenShortcutPicker = vm::openShortcutPicker,
                         onDismissShortcutPicker = vm::closeShortcutPicker,
                         onSelectShortcutApp = vm::setShortcutPackage,
+                        onOpenWeatherDetails = vm::openWeatherDetails,
+                        onCloseWeatherDetails = vm::closeWeatherDetails,
                     )
                 }
             }

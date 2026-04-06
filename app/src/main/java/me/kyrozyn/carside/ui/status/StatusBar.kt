@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +50,7 @@ fun UnifiedDashboardStatusBar(
     weather: WeatherUi,
     onShortcutClick: (Int) -> Unit,
     onShortcutLongPress: (Int) -> Unit,
+    onWeatherClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -95,7 +97,9 @@ fun UnifiedDashboardStatusBar(
                     Spacer(Modifier.width(10.dp))
                     StatusBarVerticalDivider()
                     Spacer(Modifier.width(10.dp))
-                    WeatherSection(weather = weather)
+                    Box(modifier = Modifier.clickable(onClick = onWeatherClick)) {
+                        WeatherSection(weather = weather)
+                    }
                 }
             }
         }

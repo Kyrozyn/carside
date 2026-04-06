@@ -22,6 +22,18 @@ data class WeatherSummary(
     val weatherCode: Int,
     val description: String,
     val fetchedAt: Instant,
+    val windSpeedKmh: Double? = null,
+    val humidityPercent: Int? = null,
+    val timezone: String? = null,
+    val elevationMeters: Double? = null,
+    val forecastHourly: List<WeatherHourlyPoint> = emptyList(),
+)
+
+data class WeatherHourlyPoint(
+    val timeIso: String,
+    val temperatureCelsius: Double,
+    val humidityPercent: Int,
+    val windSpeedKmh: Double,
 )
 
 data class CompassHeading(
