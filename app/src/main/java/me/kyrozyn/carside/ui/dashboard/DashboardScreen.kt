@@ -2,7 +2,6 @@ package me.kyrozyn.carside.ui.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +20,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,8 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.kyrozyn.carside.ui.map.MapPane
 import me.kyrozyn.carside.ui.media.MediaPlayerPanel
-import me.kyrozyn.carside.ui.status.LeftStatusBar
-import me.kyrozyn.carside.ui.status.RightStatusBar
+import me.kyrozyn.carside.ui.status.UnifiedDashboardStatusBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,54 +52,62 @@ fun DashboardScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        Row(Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .weight(0.62f)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surface),
-            ) {
-                MapPane(
-                    hasLocationPermission = uiState.locationPermissionGranted,
-                    userLocation = uiState.userLocation,
-                    bearing = uiState.compass.degrees,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                )
-                LeftStatusBar(clockText = uiState.clockText)
-            }
-
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
-            )
-
-            Column(
-                modifier = Modifier
-                    .weight(0.38f)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surface),
-            ) {
-                MediaPlayerPanel(
-                    state = uiState.media,
-                    notificationListenerEnabled = notificationListenerEnabled,
-                    onBrowseClick = onBrowseClick,
-                    onOpenNotificationAccessSettings = onOpenNotificationAccessSettings,
-                    onPlayPause = onPlayPause,
-                    onNext = onNext,
-                    onPrevious = onPrevious,
-                    onSeekTo = onSeekTo,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                )
-                RightStatusBar(
+        // Scaffold memberi slot konten tinggi pasti; Column+weight pada Row sering kolaps (peta/media tinggi 0).
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = {
+                UnifiedDashboardStatusBar(
+                    clockText = uiState.clockText,
                     compass = uiState.compass,
                     weather = uiState.weather,
                 )
+            },
+        ) { innerPadding ->
+            Row(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize(),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(0.62f)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.surface),
+                ) {
+                    MapPane(
+                        hasLocationPermission = uiState.locationPermissionGranted,
+                        userLocation = uiState.userLocation,
+                        bearing = uiState.compass.degrees,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                )
+
+                Box(
+                    modifier = Modifier
+                        .weight(0.38f)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.surface),
+                ) {
+                    MediaPlayerPanel(
+                        state = uiState.media,
+                        notificationListenerEnabled = notificationListenerEnabled,
+                        onBrowseClick = onBrowseClick,
+                        onOpenNotificationAccessSettings = onOpenNotificationAccessSettings,
+                        onPlayPause = onPlayPause,
+                        onNext = onNext,
+                        onPrevious = onPrevious,
+                        onSeekTo = onSeekTo,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
 

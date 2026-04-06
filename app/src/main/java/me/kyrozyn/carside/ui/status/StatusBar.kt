@@ -33,57 +33,10 @@ import me.kyrozyn.carside.ui.dashboard.WeatherUi
 // Warna ikon kompas — amber/oranye seperti jarum kompas asli
 private val CompassColor = Color(0xFFFFB300)
 
+/** Satu bar penuh: jam lokal | kompas | cuaca (di bawah peta + pemutar media). */
 @Composable
-fun LeftStatusBar(
+fun UnifiedDashboardStatusBar(
     clockText: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Surface(
-            modifier = Modifier.wrapContentWidth(),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
-            ),
-            tonalElevation = 2.dp,
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Icon(
-                    Icons.Outlined.Schedule,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
-                Column {
-                    Text(
-                        text = clockText,
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "Waktu lokal",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun RightStatusBar(
     compass: CompassHeading,
     weather: WeatherUi,
     modifier: Modifier = Modifier,
@@ -99,18 +52,81 @@ fun RightStatusBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .padding(horizontal = 12.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CompassSection(compass = compass)
             Box(
                 modifier = Modifier
-                    .width(1.dp)
-                    .height(36.dp)
-                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                    .weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                ClockStatusPill(clockText = clockText)
+            }
+            StatusBarVerticalDivider()
+            Box(
+                modifier = Modifier
+                    .weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                CompassSection(compass = compass)
+            }
+            StatusBarVerticalDivider()
+            Box(
+                modifier = Modifier
+                    .weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                WeatherSection(weather = weather)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusBarVerticalDivider() {
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(36.dp)
+            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+    )
+}
+
+@Composable
+private fun ClockStatusPill(clockText: String) {
+    Surface(
+        modifier = Modifier.wrapContentWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+        ),
+        tonalElevation = 2.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                Icons.Outlined.Schedule,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
             )
-            WeatherSection(weather = weather)
+            Column {
+                Text(
+                    text = clockText,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Waktu lokal",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                )
+            }
         }
     }
 }
