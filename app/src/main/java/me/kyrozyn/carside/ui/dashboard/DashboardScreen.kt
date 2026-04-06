@@ -17,6 +17,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -45,6 +46,7 @@ fun DashboardScreen(
     onPrevious: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onOpenAppDrawer: () -> Unit,
+    onSetUseGpsForwardMapBearing: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -78,7 +80,7 @@ fun DashboardScreen(
                     MapPane(
                         hasLocationPermission = uiState.locationPermissionGranted,
                         userLocation = uiState.userLocation,
-                        bearing = uiState.compass.degrees,
+                        bearing = uiState.mapBearingDegrees,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -157,6 +159,30 @@ fun DashboardScreen(
             ) {
                 Text("Buka pengaturan akses notifikasi", modifier = Modifier.fillMaxWidth())
             }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Orientasi peta: arah maju (GPS)",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = uiState.mapRotationMode == MapRotationMode.FORWARD_GPS,
+                    onCheckedChange = onSetUseGpsForwardMapBearing,
+                )
+            }
+            Text(
+                text = "Saat aktif, peta mengikuti arah gerak GPS. Saat kendaraan pelan/diam, otomatis fallback ke kompas agar stabil.",
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Start,
+            )
             TextButton(
                 onClick = {
                     onRefreshSystemMedia()

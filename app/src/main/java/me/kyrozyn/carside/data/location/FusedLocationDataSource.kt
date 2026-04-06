@@ -24,7 +24,14 @@ class FusedLocationDataSource(context: Context) : LocationProvider {
     override val locationUpdates: Flow<GeoLocation?> = callbackFlow {
         client.lastLocation.addOnSuccessListener { loc ->
             if (loc != null) {
-                trySend(GeoLocation(loc.latitude, loc.longitude))
+                trySend(
+                    GeoLocation(
+                        latitude = loc.latitude,
+                        longitude = loc.longitude,
+                        bearingDegrees = loc.bearing.takeIf { loc.hasBearing() },
+                        speedMps = loc.speed.takeIf { loc.hasSpeed() },
+                    ),
+                )
             }
         }
 
@@ -36,7 +43,14 @@ class FusedLocationDataSource(context: Context) : LocationProvider {
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val loc = result.lastLocation ?: return
-                trySend(GeoLocation(loc.latitude, loc.longitude))
+                trySend(
+                    GeoLocation(
+                        latitude = loc.latitude,
+                        longitude = loc.longitude,
+                        bearingDegrees = loc.bearing.takeIf { loc.hasBearing() },
+                        speedMps = loc.speed.takeIf { loc.hasSpeed() },
+                    ),
+                )
             }
         }
 

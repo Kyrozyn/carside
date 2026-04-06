@@ -32,11 +32,18 @@ sealed interface WeatherUi {
     data class Error(val message: String) : WeatherUi
 }
 
+enum class MapRotationMode {
+    COMPASS,
+    FORWARD_GPS,
+}
+
 data class DashboardUiState(
     val media: MediaPlaybackState,
     val weather: WeatherUi,
     val clockText: String,
     val compass: CompassHeading,
+    val mapRotationMode: MapRotationMode,
+    val mapBearingDegrees: Float,
     val browseOpen: Boolean,
     val locationPermissionGranted: Boolean,
     /** Lokasi terakhir dari Fused Location — untuk peta mengikuti posisi Anda. */
@@ -66,6 +73,9 @@ class DashboardViewModel(
     private val lastLocation = effectiveLocation
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    private val mapRotationMode = container.settingsRepository.useGpsForwardMapBearing
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     val uiState: StateFlow<DashboardUiState> = combine(
         combine(
             container.mediaController.playbackState,
@@ -74,18 +84,26 @@ class DashboardViewModel(
         ) { media, weather, clock ->
             Triple(media, weather, clock)
         },
-        combine(_compass, _browseOpen, _locationPermission) { compass, browse, perm ->
-            Triple(compass, browse, perm)
+        combine(_compass, _browseOpen, _locationPermission, mapRotationMode) { compass, browse, perm, useGps ->
+            Quadruple(compass, browse, perm, useGps)
         },
         _userLocation,
-    ) { mediaClock, compassBrowsePerm, userLoc ->
+    ) { mediaClock, compassBrowsePermMode, userLoc ->
+        val compass = compassBrowsePermMode.first
+        val mode = if (compassBrowsePermMode.fourth) MapRotationMode.FORWARD_GPS else MapRotationMode.COMPASS
+        val mapBearing = when (mode) {
+            MapRotationMode.COMPASS -> compass.degrees
+            MapRotationMode.FORWARD_GPS -> gpsForwardBearingOrNull(userLoc) ?: compass.degrees
+        }
         DashboardUiState(
             media = mediaClock.first,
             weather = mediaClock.second,
             clockText = mediaClock.third,
-            compass = compassBrowsePerm.first,
-            browseOpen = compassBrowsePerm.second,
-            locationPermissionGranted = compassBrowsePerm.third,
+            compass = compass,
+            mapRotationMode = mode,
+            mapBearingDegrees = normalizeBearing(mapBearing),
+            browseOpen = compassBrowsePermMode.second,
+            locationPermissionGranted = compassBrowsePermMode.third,
             userLocation = userLoc,
         )
     }.stateIn(
@@ -96,6 +114,8 @@ class DashboardViewModel(
             weather = WeatherUi.Idle,
             clockText = formatTime(),
             compass = CompassHeading(0f, "N"),
+            mapRotationMode = MapRotationMode.COMPASS,
+            mapBearingDegrees = 0f,
             browseOpen = false,
             locationPermissionGranted = false,
             userLocation = null,
@@ -167,6 +187,10 @@ class DashboardViewModel(
         _browseOpen.value = open
     }
 
+    fun setUseGpsForwardMapBearing(enabled: Boolean) {
+        container.settingsRepository.setUseGpsForwardMapBearing(enabled)
+    }
+
     fun onPlayPause() {
         val playing = container.mediaController.playbackState.value.isPlaying
         if (playing) container.mediaController.pause() else container.mediaController.play()
@@ -178,6 +202,22 @@ class DashboardViewModel(
     fun onSeekTo(positionMs: Long) = container.mediaController.seekTo(positionMs)
 
     companion object {
+        /** Saat di bawah ini, arah GPS cenderung noise saat kendaraan diam/pelan. */
+        private const val GPS_BEARING_MIN_SPEED_MPS = 2.0f
+
+        private fun gpsForwardBearingOrNull(location: GeoLocation?): Float? {
+            location ?: return null
+            val speed = location.speedMps ?: return null
+            val bearing = location.bearingDegrees ?: return null
+            if (speed < GPS_BEARING_MIN_SPEED_MPS) return null
+            return bearing
+        }
+
+        private fun normalizeBearing(degrees: Float): Float {
+            val mod = degrees % 360f
+            return if (mod < 0f) mod + 360f else mod
+        }
+
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -188,3 +228,10 @@ class DashboardViewModel(
             }
     }
 }
+
+private data class Quadruple<A, B, C, D>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D,
+)

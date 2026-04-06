@@ -5,6 +5,10 @@ import java.time.Instant
 data class GeoLocation(
     val latitude: Double,
     val longitude: Double,
+    /** Bearing/arah gerak dari GPS (course over ground), derajat 0..360 jika tersedia. */
+    val bearingDegrees: Float? = null,
+    /** Kecepatan dari GPS dalam meter/detik jika tersedia. */
+    val speedMps: Float? = null,
 )
 
 data class TrackInfo(

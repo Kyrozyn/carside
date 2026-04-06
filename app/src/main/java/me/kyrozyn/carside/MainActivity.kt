@@ -175,6 +175,7 @@ class MainActivity : ComponentActivity() {
                         onPrevious = vm::onPrevious,
                         onSeekTo = vm::onSeekTo,
                         onOpenAppDrawer = { showAppDrawer = true },
+                        onSetUseGpsForwardMapBearing = vm::setUseGpsForwardMapBearing,
                     )
                 }
             }

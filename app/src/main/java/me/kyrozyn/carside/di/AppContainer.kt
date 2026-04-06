@@ -6,6 +6,7 @@ import me.kyrozyn.carside.data.connectivity.NetworkStatusTracker
 import me.kyrozyn.carside.data.location.FusedLocationDataSource
 import me.kyrozyn.carside.data.map.NoOpMapSession
 import me.kyrozyn.carside.data.media.SystemMediaSessionRepository
+import me.kyrozyn.carside.data.settings.AppSettingsRepository
 import me.kyrozyn.carside.data.weather.OpenMeteoWeatherRepository
 import me.kyrozyn.carside.domain.repository.CompassProvider
 import me.kyrozyn.carside.domain.repository.LocationProvider
@@ -23,4 +24,5 @@ class AppContainer(context: Context) {
     val mediaController: MediaController = SystemMediaSessionRepository(appContext)
     val compassProvider: CompassProvider = SensorCompassProvider(appContext)
     val mapSession: MapSession = NoOpMapSession()
+    val settingsRepository = AppSettingsRepository(appContext)
 }
