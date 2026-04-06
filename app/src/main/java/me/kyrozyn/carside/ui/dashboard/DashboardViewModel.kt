@@ -5,6 +5,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,6 +70,8 @@ class DashboardViewModel(
     private val _isOnline = MutableStateFlow(false)
     private val _userLocation = MutableStateFlow<GeoLocation?>(null)
     private var weatherFetchJob: Job? = null
+    private var lastWeatherFetchLocation: GeoLocation? = null
+    private var lastWeatherFetchAtMs: Long = 0L
 
     private val effectiveLocation = _locationPermission.flatMapLatest { granted ->
         if (granted) container.locationProvider.locationUpdates else flowOf(null)
@@ -142,22 +149,26 @@ class DashboardViewModel(
             effectiveLocation.collect { _userLocation.value = it }
         }
 
-        // Fetch cuaca sekali saat pertama kali lokasi + jaringan tersedia
+        // Fetch cuaca saat lokasi berubah signifikan atau interval refresh terlewati.
         viewModelScope.launch {
-            val (loc, _) = combine(
+            combine(
                 effectiveLocation,
                 container.networkStatusTracker.isOnline,
             ) { loc: GeoLocation?, online: Boolean -> loc to online }
-                .first { (loc, online) -> loc != null && online }
-            fetchWeather(loc!!)
+                .collect { (loc, online) ->
+                    if (!online || loc == null) return@collect
+                    if (shouldFetchWeatherForLocation(loc, System.currentTimeMillis())) {
+                        fetchWeather(loc)
+                    }
+                }
         }
 
-        // Refresh cuaca setiap 10 menit menggunakan lokasi terbaru
+        // Backup refresh: tetap update berkala meski kendaraan tidak bergerak jauh.
         viewModelScope.launch {
             while (isActive) {
                 delay(10.minutes)
                 val loc = lastLocation.value
-                if (_isOnline.value && loc != null) {
+                if (_isOnline.value && loc != null && shouldFetchWeatherForLocation(loc, System.currentTimeMillis())) {
                     fetchWeather(loc)
                 }
             }
@@ -167,6 +178,8 @@ class DashboardViewModel(
     private fun formatTime(): String = LocalTime.now().format(timeFormatter)
 
     private fun fetchWeather(location: GeoLocation) {
+        lastWeatherFetchLocation = location
+        lastWeatherFetchAtMs = System.currentTimeMillis()
         weatherFetchJob?.cancel()
         weatherFetchJob = viewModelScope.launch {
             _weather.value = WeatherUi.Loading
@@ -202,6 +215,9 @@ class DashboardViewModel(
     fun onSeekTo(positionMs: Long) = container.mediaController.seekTo(positionMs)
 
     companion object {
+        private const val WEATHER_REFRESH_DISTANCE_METERS = 1_000.0
+        private const val WEATHER_REFRESH_INTERVAL_MS = 10 * 60 * 1_000L
+
         /** Saat di bawah ini, arah GPS cenderung noise saat kendaraan diam/pelan. */
         private const val GPS_BEARING_MIN_SPEED_MPS = 2.0f
 
@@ -226,6 +242,30 @@ class DashboardViewModel(
                     return DashboardViewModel(container) as T
                 }
             }
+    }
+
+    private fun shouldFetchWeatherForLocation(location: GeoLocation, nowMs: Long): Boolean {
+        val lastLoc = lastWeatherFetchLocation
+        if (lastLoc == null) return true
+        val elapsedMs = nowMs - lastWeatherFetchAtMs
+        if (elapsedMs >= WEATHER_REFRESH_INTERVAL_MS) return true
+        val distance = haversineMeters(
+            lastLoc.latitude,
+            lastLoc.longitude,
+            location.latitude,
+            location.longitude,
+        )
+        return distance >= WEATHER_REFRESH_DISTANCE_METERS
+    }
+
+    private fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6_371_000.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = sin(dLat / 2).pow(2.0) +
+            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2.0)
+        val c = 2.0 * asin(sqrt(a))
+        return r * c
     }
 }
 
