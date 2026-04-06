@@ -8,7 +8,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -16,7 +22,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.kyrozyn.carside.ui.map.MapPane
@@ -37,6 +45,7 @@ fun DashboardScreen(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeekTo: (Long) -> Unit,
+    onOpenAppDrawer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -93,6 +102,23 @@ fun DashboardScreen(
                     weather = uiState.weather,
                 )
             }
+        }
+
+        // Tombol app drawer (pojok kiri atas)
+        IconButton(
+            onClick = onOpenAppDrawer,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+        ) {
+            Icon(
+                Icons.Default.Apps,
+                contentDescription = "Semua aplikasi",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(26.dp),
+            )
         }
     }
 

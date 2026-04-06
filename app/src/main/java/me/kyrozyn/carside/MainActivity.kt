@@ -33,6 +33,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import me.kyrozyn.carside.ui.apps.AppDrawerScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardViewModel
 import me.kyrozyn.carside.ui.theme.CarsideTheme
@@ -58,6 +59,7 @@ class MainActivity : ComponentActivity() {
 
                 var notificationListenerEnabled by remember { mutableStateOf(false) }
                 var showNotificationAccessDialog by remember { mutableStateOf(false) }
+                var showAppDrawer by remember { mutableStateOf(false) }
 
                 DisposableEffect(lifecycleOwner) {
                     val syncAccess: () -> Unit = {
@@ -141,24 +143,40 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                DashboardScreen(
-                    uiState = uiState,
-                    notificationListenerEnabled = notificationListenerEnabled,
-                    onBrowseClick = { vm.setBrowseOpen(true) },
-                    onDismissBrowse = { vm.setBrowseOpen(false) },
-                    onOpenNotificationAccessSettings = {
-                        showNotificationAccessDialog = false
-                        requestCarsideNotificationListenerRebind()
-                        startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    },
-                    onRefreshSystemMedia = {
-                        (application as CarsideApplication).container.mediaController.refreshActiveSessions()
-                    },
-                    onPlayPause = vm::onPlayPause,
-                    onNext = vm::onNext,
-                    onPrevious = vm::onPrevious,
-                    onSeekTo = vm::onSeekTo,
-                )
+                if (showAppDrawer) {
+                    AppDrawerScreen(
+                        onBack = { showAppDrawer = false },
+                        onLaunchApp = { packageName ->
+                            packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
+                                launchIntent.addFlags(
+                                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED,
+                                )
+                                startActivity(launchIntent)
+                            }
+                        },
+                    )
+                } else {
+                    DashboardScreen(
+                        uiState = uiState,
+                        notificationListenerEnabled = notificationListenerEnabled,
+                        onBrowseClick = { vm.setBrowseOpen(true) },
+                        onDismissBrowse = { vm.setBrowseOpen(false) },
+                        onOpenNotificationAccessSettings = {
+                            showNotificationAccessDialog = false
+                            requestCarsideNotificationListenerRebind()
+                            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        },
+                        onRefreshSystemMedia = {
+                            (application as CarsideApplication).container.mediaController.refreshActiveSessions()
+                        },
+                        onPlayPause = vm::onPlayPause,
+                        onNext = vm::onNext,
+                        onPrevious = vm::onPrevious,
+                        onSeekTo = vm::onSeekTo,
+                        onOpenAppDrawer = { showAppDrawer = true },
+                    )
+                }
             }
         }
     }

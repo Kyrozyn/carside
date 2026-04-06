@@ -55,8 +55,12 @@ import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconRotate
 import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
 import org.maplibre.android.style.layers.PropertyFactory.iconSize
+import org.maplibre.android.style.layers.PropertyFactory.rasterOpacity
+import org.maplibre.android.style.layers.RasterLayer
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.android.style.sources.RasterSource
+import org.maplibre.android.style.sources.TileSet
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.Point
 
@@ -64,8 +68,24 @@ private const val FOLLOW_ZOOM = 17.0
 private const val LOCATION_SOURCE_ID = "location-source"
 private const val LOCATION_LAYER_ID = "location-layer"
 private const val LOCATION_ICON_ID = "location-arrow"
+private const val OSM_TRAFFIC_SOURCE_ID = "osm-google-traffic-source"
+private const val OSM_TRAFFIC_LAYER_ID = "osm-google-traffic-layer"
 
-private enum class MapStyle { GOOGLE, OSM }
+private val GOOGLE_TRAFFIC_TILE_URLS = arrayOf(
+    "https://mt0.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
+    "https://mt1.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
+    "https://mt2.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
+    "https://mt3.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
+)
+
+private enum class MapStyle {
+    /** Google raster + traffic */
+    GOOGLE,
+    /** OpenFreeMap vector + overlay traffic Google (opacity ringan) */
+    OSM_GOOGLE_TRAFFIC,
+    /** OpenFreeMap vector saja */
+    OSM,
+}
 
 // Style JSON untuk Google Maps raster + traffic — teks tidak dirotasi karena raster
 private val GOOGLE_STYLE_JSON = """
@@ -189,7 +209,13 @@ fun MapPane(
         ) {
             MapLayerSwitchButton(
                 currentStyle = mapStyle,
-                onClick = { mapStyle = if (mapStyle == MapStyle.GOOGLE) MapStyle.OSM else MapStyle.GOOGLE },
+                onClick = {
+                    mapStyle = when (mapStyle) {
+                        MapStyle.GOOGLE -> MapStyle.OSM_GOOGLE_TRAFFIC
+                        MapStyle.OSM_GOOGLE_TRAFFIC -> MapStyle.OSM
+                        MapStyle.OSM -> MapStyle.GOOGLE
+                    }
+                },
             )
             MapControlButton(
                 icon = Icons.Default.Add,
@@ -231,25 +257,42 @@ private fun loadMapStyle(
     val arrowBitmap = locationArrowBitmap(72)
     val styleUri = when (style) {
         MapStyle.GOOGLE -> Style.Builder().fromJson(GOOGLE_STYLE_JSON)
-        MapStyle.OSM    -> Style.Builder().fromUri(OSM_STYLE_URL)
+        MapStyle.OSM_GOOGLE_TRAFFIC,
+        MapStyle.OSM,
+        -> Style.Builder().fromUri(OSM_STYLE_URL)
     }
 
     map.setStyle(styleUri) { loadedStyle ->
         loadedStyle.addImage(LOCATION_ICON_ID, arrowBitmap)
 
+        // OSM + traffic: overlay raster Google 20% di atas vector OpenFreeMap
+        if (style == MapStyle.OSM_GOOGLE_TRAFFIC) {
+            if (loadedStyle.getSource(OSM_TRAFFIC_SOURCE_ID) == null) {
+                val tileSet = TileSet("2.1.0", *GOOGLE_TRAFFIC_TILE_URLS)
+                loadedStyle.addSource(RasterSource(OSM_TRAFFIC_SOURCE_ID, tileSet, 256))
+            }
+            if (loadedStyle.getLayer(OSM_TRAFFIC_LAYER_ID) == null) {
+                loadedStyle.addLayer(
+                    RasterLayer(OSM_TRAFFIC_LAYER_ID, OSM_TRAFFIC_SOURCE_ID).withProperties(
+                        rasterOpacity(0.2f),
+                    ),
+                )
+            }
+        }
+
         if (loadedStyle.getSource(LOCATION_SOURCE_ID) == null) {
             loadedStyle.addSource(GeoJsonSource(LOCATION_SOURCE_ID))
         }
         if (loadedStyle.getLayer(LOCATION_LAYER_ID) == null) {
+            val useMapRotation = style == MapStyle.OSM || style == MapStyle.OSM_GOOGLE_TRAFFIC
             loadedStyle.addLayer(
                 SymbolLayer(LOCATION_LAYER_ID, LOCATION_SOURCE_ID).withProperties(
                     iconImage(LOCATION_ICON_ID),
                     iconSize(1.0f),
                     iconAllowOverlap(true),
                     iconIgnorePlacement(true),
-                    // "map" = ikon ikut rotasi peta (OSM), "viewport" = selalu tegak (Google)
                     iconRotationAlignment(
-                        if (style == MapStyle.OSM) "map" else "viewport",
+                        if (useMapRotation) "map" else "viewport",
                     ),
                 ),
             )
@@ -263,22 +306,25 @@ private fun loadMapStyle(
 private fun applyLocationAndBearing(
     map: MapLibreMap,
     mapState: MapState,
-    style: MapStyle,
+    mode: MapStyle,
 ) {
     val loc = mapState.pendingLocation ?: return
     val bearing = mapState.pendingBearing
 
-    // Update posisi ikon panah
-    val style = map.style ?: return
-    (style.getSource(LOCATION_SOURCE_ID) as? GeoJsonSource)
+    val mapStyleObj = map.style ?: return
+    (mapStyleObj.getSource(LOCATION_SOURCE_ID) as? GeoJsonSource)
         ?.setGeoJson(Feature.fromGeometry(Point.fromLngLat(loc.longitude, loc.latitude)))
 
-    // Update rotasi ikon (selalu menunjuk arah hadap)
-    (style.getLayer(LOCATION_LAYER_ID) as? SymbolLayer)
+    (mapStyleObj.getLayer(LOCATION_LAYER_ID) as? SymbolLayer)
         ?.setProperties(iconRotate(bearing))
 
-    // Kamera: di OSM bearing ikut kompas, Google tetap north-up
-    val cameraBearing = if (currentStyleIs(map, MapStyle.OSM)) bearing.toDouble() else 0.0
+    // Kamera: mode vector OSM ikut kompas; Google north-up
+    val cameraBearing = when (mode) {
+        MapStyle.GOOGLE -> 0.0
+        MapStyle.OSM_GOOGLE_TRAFFIC,
+        MapStyle.OSM,
+        -> bearing.toDouble()
+    }
 
     val target = LatLng(loc.latitude, loc.longitude)
     val cameraBuilder = CameraPosition.Builder().target(target).bearing(cameraBearing)
@@ -295,17 +341,19 @@ private fun applyLocationAndBearing(
     }
 }
 
-private fun currentStyleIs(map: MapLibreMap, style: MapStyle): Boolean {
-    val uri = map.style?.uri ?: return false
-    return when (style) {
-        MapStyle.OSM    -> uri == OSM_STYLE_URL
-        MapStyle.GOOGLE -> uri != OSM_STYLE_URL
-    }
-}
-
 @Composable
 private fun MapLayerSwitchButton(currentStyle: MapStyle, onClick: () -> Unit) {
     val isGoogle = currentStyle == MapStyle.GOOGLE
+    val (label, labelSp) = when (currentStyle) {
+        MapStyle.GOOGLE -> "G" to 10.sp
+        MapStyle.OSM_GOOGLE_TRAFFIC -> "OSMG" to 7.sp
+        MapStyle.OSM -> "OSM" to 8.sp
+    }
+    val desc = when (currentStyle) {
+        MapStyle.GOOGLE -> "Google Maps + traffic"
+        MapStyle.OSM_GOOGLE_TRAFFIC -> "OpenStreetMap + traffic"
+        MapStyle.OSM -> "OpenStreetMap"
+    }
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
@@ -322,17 +370,18 @@ private fun MapLayerSwitchButton(currentStyle: MapStyle, onClick: () -> Unit) {
             ) {
                 Icon(
                     imageVector = Icons.Default.Layers,
-                    contentDescription = "Ganti layer peta",
+                    contentDescription = desc,
                     tint = if (isGoogle) MaterialTheme.colorScheme.onPrimary
-                           else MaterialTheme.colorScheme.onSurface,
+                    else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(18.dp),
                 )
                 Text(
-                    text = if (isGoogle) "G" else "OSM",
-                    fontSize = 9.sp,
+                    text = label,
+                    fontSize = labelSp,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                     color = if (isGoogle) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.onSurface,
+                    else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
