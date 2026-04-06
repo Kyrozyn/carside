@@ -59,6 +59,7 @@ dependencies {
 
     implementation(libs.play.services.location)
     implementation(libs.osmdroid.android)
+    implementation(libs.maplibre.android)
 
     implementation(libs.okhttp)
     implementation(libs.coil.compose)

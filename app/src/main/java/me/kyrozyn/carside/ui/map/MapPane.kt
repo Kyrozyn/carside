@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.drawable.BitmapDrawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,16 +24,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,42 +42,63 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import kotlin.math.roundToInt
 import me.kyrozyn.carside.domain.model.GeoLocation
-import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.tileprovider.tilesource.ITileSource
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.util.MapTileIndex
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.gestures.RotationGestureOverlay
+import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconRotate
+import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
+import org.maplibre.android.style.layers.PropertyFactory.iconSize
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.Point
 
 private const val FOLLOW_ZOOM = 17.0
+private const val LOCATION_SOURCE_ID = "location-source"
+private const val LOCATION_LAYER_ID = "location-layer"
+private const val LOCATION_ICON_ID = "location-arrow"
 
 private enum class MapStyle { GOOGLE, OSM }
 
-private val TileSourceGoogle = object : OnlineTileSourceBase(
-    "GoogleMapsTraffic",
-    0, 20, 256, "",
-    arrayOf(
-        "https://mt0.google.com/vt/lyrs=m@221097413,traffic&",
-        "https://mt1.google.com/vt/lyrs=m@221097413,traffic&",
-        "https://mt2.google.com/vt/lyrs=m@221097413,traffic&",
-        "https://mt3.google.com/vt/lyrs=m@221097413,traffic&",
-    ),
-) {
-    override fun getTileURLString(pMapTileIndex: Long): String =
-        "${baseUrl}x=${MapTileIndex.getX(pMapTileIndex)}" +
-        "&y=${MapTileIndex.getY(pMapTileIndex)}" +
-        "&z=${MapTileIndex.getZoom(pMapTileIndex)}"
+// Style JSON untuk Google Maps raster + traffic — teks tidak dirotasi karena raster
+private val GOOGLE_STYLE_JSON = """
+{
+  "version": 8,
+  "sources": {
+    "google-traffic": {
+      "type": "raster",
+      "tiles": [
+        "https://mt0.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
+        "https://mt1.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
+        "https://mt2.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
+        "https://mt3.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}"
+      ],
+      "tileSize": 256
+    }
+  },
+  "layers": [{
+    "id": "google-traffic-layer",
+    "type": "raster",
+    "source": "google-traffic"
+  }]
 }
+""".trimIndent()
 
-// OSM default (Mapnik) — tile bawaan osmdroid, ringan dan proper untuk rotasi navigasi
-private val TileSourceOsmDefault = TileSourceFactory.MAPNIK
+// Vector tiles OpenFreeMap — teks tetap tegak saat dirotasi
+private const val OSM_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
 
-private class MapFollowState {
-    var marker: Marker? = null
+private class MapState {
+    var map: MapLibreMap? = null
+    var styleLoaded: Boolean = false
+    var pendingLocation: GeoLocation? = null
+    var pendingBearing: Float = 0f
     var didInitialZoom: Boolean = false
 }
 
@@ -90,103 +111,72 @@ fun MapPane(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val density = LocalDensity.current
-    val arrowPx = (36 * density.density).roundToInt().coerceIn(24, 72)
 
-    val mapState = remember { MapFollowState() }
     var mapStyle by remember { mutableStateOf(MapStyle.GOOGLE) }
+    val mapState = remember { MapState() }
+    val currentLocation by rememberUpdatedState(userLocation)
+    val currentBearing by rememberUpdatedState(bearing)
+    val currentStyle by rememberUpdatedState(mapStyle)
 
-    val mapView = remember(context) {
-        MapView(context).apply {
-            setTileSource(TileSourceGoogle)
-            setMultiTouchControls(true)
-            isTilesScaledToDpi = true
-            minZoomLevel = 4.0
-            maxZoomLevel = 20.0
-            controller.setZoom(10.0)
-            controller.setCenter(GeoPoint(-6.2, 106.8))
-            overlays.add(RotationGestureOverlay(this).apply { isEnabled = true })
-        }
-    }
+    val mapView = remember(context) { MapView(context) }
 
+    // Lifecycle MapLibre
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE  -> mapView.onPause()
+                Lifecycle.Event.ON_START   -> mapView.onStart()
+                Lifecycle.Event.ON_RESUME  -> mapView.onResume()
+                Lifecycle.Event.ON_PAUSE   -> mapView.onPause()
+                Lifecycle.Event.ON_STOP    -> mapView.onStop()
+                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
                 else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
+        mapView.onCreate(null)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            mapState.marker?.let { mapView.overlays.remove(it) }
-            mapState.marker = null
-            mapState.didInitialZoom = false
-            mapView.onDetach()
+            mapView.onDestroy()
         }
+    }
+
+    // Inisialisasi map + load style awal
+    LaunchedEffect(mapView) {
+        mapView.getMapAsync { map ->
+            mapState.map = map
+            map.uiSettings.apply {
+                isCompassEnabled = false
+                isLogoEnabled = false
+                isAttributionEnabled = false
+            }
+            loadMapStyle(map, mapStyle, mapState, context)
+        }
+    }
+
+    // Ganti style saat mode berubah
+    LaunchedEffect(mapStyle) {
+        val map = mapState.map ?: return@LaunchedEffect
+        mapState.styleLoaded = false
+        loadMapStyle(map, mapStyle, mapState, context)
+    }
+
+    // Update lokasi + bearing
+    LaunchedEffect(userLocation, bearing, hasLocationPermission) {
+        val map = mapState.map ?: return@LaunchedEffect
+        if (!hasLocationPermission || userLocation == null) return@LaunchedEffect
+
+        mapState.pendingLocation = userLocation
+        mapState.pendingBearing = bearing
+
+        if (!mapState.styleLoaded) return@LaunchedEffect
+
+        applyLocationAndBearing(map, mapState, currentStyle)
     }
 
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
             factory = { mapView },
             modifier = Modifier.fillMaxSize(),
-            update = { mv ->
-                // Terapkan tile source sesuai style aktif
-                val expectedSource = when (mapStyle) {
-                    MapStyle.GOOGLE -> TileSourceGoogle
-                    MapStyle.OSM    -> TileSourceOsmDefault
-                }
-                if (mv.tileProvider.tileSource.name() != expectedSource.name()) {
-                    mv.setTileSource(expectedSource)
-                    mv.invalidate()
-                }
-
-                // Rotasi ikut kompas di OSM; Google Maps tetap North-Up
-                mv.mapOrientation = if (mapStyle == MapStyle.OSM) -bearing else 0f
-
-                if (!hasLocationPermission) {
-                    mapState.marker?.let {
-                        mv.overlays.remove(it)
-                        mapState.marker = null
-                    }
-                    mapState.didInitialZoom = false
-                    mv.invalidate()
-                    return@AndroidView
-                }
-
-                val loc = userLocation ?: run {
-                    mv.invalidate()
-                    return@AndroidView
-                }
-
-                val point = GeoPoint(loc.latitude, loc.longitude)
-
-                if (mapState.marker == null) {
-                    val icon = locationArrowDrawable(mv.context.resources, arrowPx)
-                    val marker = Marker(mv).apply {
-                        position = point
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                        title = "Posisi Anda"
-                        setIcon(icon)
-                        rotation = bearing
-                    }
-                    mv.overlays.add(marker)
-                    mapState.marker = marker
-                    if (!mapState.didInitialZoom) {
-                        mv.controller.setZoom(FOLLOW_ZOOM)
-                        mapState.didInitialZoom = true
-                    }
-                    mv.controller.animateTo(point)
-                } else {
-                    mapState.marker?.apply {
-                        position = point
-                        rotation = bearing
-                    }
-                    mv.controller.setCenter(point)
-                }
-                mv.invalidate()
-            },
         )
 
         // Kontrol peta di kanan bawah
@@ -197,32 +187,34 @@ fun MapPane(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.End,
         ) {
-            // Tombol switch layer
             MapLayerSwitchButton(
                 currentStyle = mapStyle,
-                onClick = {
-                    mapStyle = if (mapStyle == MapStyle.GOOGLE) MapStyle.OSM else MapStyle.GOOGLE
-                },
+                onClick = { mapStyle = if (mapStyle == MapStyle.GOOGLE) MapStyle.OSM else MapStyle.GOOGLE },
             )
-
             MapControlButton(
                 icon = Icons.Default.Add,
                 contentDescription = "Perbesar",
-                onClick = { mapView.controller.zoomIn() },
+                onClick = { mapState.map?.animateCamera(CameraUpdateFactory.zoomIn()) },
             )
             MapControlButton(
                 icon = Icons.Default.Remove,
                 contentDescription = "Perkecil",
-                onClick = { mapView.controller.zoomOut() },
+                onClick = { mapState.map?.animateCamera(CameraUpdateFactory.zoomOut()) },
             )
             MapControlButton(
                 icon = Icons.Default.MyLocation,
                 contentDescription = "Lokasi saya",
                 tintOverride = MaterialTheme.colorScheme.primary,
                 onClick = {
-                    userLocation?.let {
-                        mapView.controller.animateTo(GeoPoint(it.latitude, it.longitude))
-                        mapView.controller.setZoom(FOLLOW_ZOOM)
+                    userLocation?.let { loc ->
+                        mapState.map?.animateCamera(
+                            CameraUpdateFactory.newCameraPosition(
+                                CameraPosition.Builder()
+                                    .target(LatLng(loc.latitude, loc.longitude))
+                                    .zoom(FOLLOW_ZOOM)
+                                    .build(),
+                            ),
+                        )
                     }
                 },
             )
@@ -230,27 +222,100 @@ fun MapPane(
     }
 }
 
-@Composable
-private fun MapLayerSwitchButton(
-    currentStyle: MapStyle,
-    onClick: () -> Unit,
+private fun loadMapStyle(
+    map: MapLibreMap,
+    style: MapStyle,
+    mapState: MapState,
+    context: android.content.Context,
 ) {
+    val arrowBitmap = locationArrowBitmap(72)
+    val styleUri = when (style) {
+        MapStyle.GOOGLE -> Style.Builder().fromJson(GOOGLE_STYLE_JSON)
+        MapStyle.OSM    -> Style.Builder().fromUri(OSM_STYLE_URL)
+    }
+
+    map.setStyle(styleUri) { loadedStyle ->
+        loadedStyle.addImage(LOCATION_ICON_ID, arrowBitmap)
+
+        if (loadedStyle.getSource(LOCATION_SOURCE_ID) == null) {
+            loadedStyle.addSource(GeoJsonSource(LOCATION_SOURCE_ID))
+        }
+        if (loadedStyle.getLayer(LOCATION_LAYER_ID) == null) {
+            loadedStyle.addLayer(
+                SymbolLayer(LOCATION_LAYER_ID, LOCATION_SOURCE_ID).withProperties(
+                    iconImage(LOCATION_ICON_ID),
+                    iconSize(1.0f),
+                    iconAllowOverlap(true),
+                    iconIgnorePlacement(true),
+                    // "map" = ikon ikut rotasi peta (OSM), "viewport" = selalu tegak (Google)
+                    iconRotationAlignment(
+                        if (style == MapStyle.OSM) "map" else "viewport",
+                    ),
+                ),
+            )
+        }
+
+        mapState.styleLoaded = true
+        applyLocationAndBearing(map, mapState, style)
+    }
+}
+
+private fun applyLocationAndBearing(
+    map: MapLibreMap,
+    mapState: MapState,
+    style: MapStyle,
+) {
+    val loc = mapState.pendingLocation ?: return
+    val bearing = mapState.pendingBearing
+
+    // Update posisi ikon panah
+    val style = map.style ?: return
+    (style.getSource(LOCATION_SOURCE_ID) as? GeoJsonSource)
+        ?.setGeoJson(Feature.fromGeometry(Point.fromLngLat(loc.longitude, loc.latitude)))
+
+    // Update rotasi ikon (selalu menunjuk arah hadap)
+    (style.getLayer(LOCATION_LAYER_ID) as? SymbolLayer)
+        ?.setProperties(iconRotate(bearing))
+
+    // Kamera: di OSM bearing ikut kompas, Google tetap north-up
+    val cameraBearing = if (currentStyleIs(map, MapStyle.OSM)) bearing.toDouble() else 0.0
+
+    val target = LatLng(loc.latitude, loc.longitude)
+    val cameraBuilder = CameraPosition.Builder().target(target).bearing(cameraBearing)
+
+    if (!mapState.didInitialZoom) {
+        cameraBuilder.zoom(FOLLOW_ZOOM)
+        mapState.didInitialZoom = true
+        map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()))
+    } else {
+        map.animateCamera(
+            CameraUpdateFactory.newCameraPosition(cameraBuilder.zoom(map.cameraPosition.zoom).build()),
+            300,
+        )
+    }
+}
+
+private fun currentStyleIs(map: MapLibreMap, style: MapStyle): Boolean {
+    val uri = map.style?.uri ?: return false
+    return when (style) {
+        MapStyle.OSM    -> uri == OSM_STYLE_URL
+        MapStyle.GOOGLE -> uri != OSM_STYLE_URL
+    }
+}
+
+@Composable
+private fun MapLayerSwitchButton(currentStyle: MapStyle, onClick: () -> Unit) {
     val isGoogle = currentStyle == MapStyle.GOOGLE
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .background(
-                if (isGoogle)
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
-                else
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                if (isGoogle) MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
+                else MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
             ),
         contentAlignment = Alignment.Center,
     ) {
-        IconButton(
-            onClick = onClick,
-            modifier = Modifier.size(44.dp),
-        ) {
+        IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
@@ -258,20 +323,16 @@ private fun MapLayerSwitchButton(
                 Icon(
                     imageVector = Icons.Default.Layers,
                     contentDescription = "Ganti layer peta",
-                    tint = if (isGoogle)
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurface,
+                    tint = if (isGoogle) MaterialTheme.colorScheme.onPrimary
+                           else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(18.dp),
                 )
                 Text(
                     text = if (isGoogle) "G" else "OSM",
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isGoogle)
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurface,
+                    color = if (isGoogle) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -292,24 +353,13 @@ private fun MapControlButton(
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
         contentAlignment = Alignment.Center,
     ) {
-        IconButton(
-            onClick = onClick,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = tintOverride,
-                modifier = Modifier.size(22.dp),
-            )
+        IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+            Icon(icon, contentDescription, tint = tintOverride, modifier = Modifier.size(22.dp))
         }
     }
 }
 
-private fun locationArrowDrawable(
-    res: android.content.res.Resources,
-    sizePx: Int,
-): BitmapDrawable {
+private fun locationArrowBitmap(sizePx: Int): Bitmap {
     val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
 
@@ -319,7 +369,7 @@ private fun locationArrowDrawable(
     }
     val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = sizePx * 0.12f
+        strokeWidth = sizePx * 0.10f
         strokeJoin = Paint.Join.ROUND
         color = Color.WHITE
     }
@@ -328,19 +378,17 @@ private fun locationArrowDrawable(
     val cy = sizePx / 2f
     val tip = cy * 0.10f
     val baseY = cy * 1.85f
-    val halfBase = cx * 0.60f
-    val notchDepth = cy * 1.45f
+    val halfBase = cx * 0.58f
+    val notch = cy * 1.42f
 
     val arrow = Path().apply {
         moveTo(cx, tip)
         lineTo(cx + halfBase, baseY)
-        lineTo(cx, notchDepth)
+        lineTo(cx, notch)
         lineTo(cx - halfBase, baseY)
         close()
     }
-
     canvas.drawPath(arrow, fill)
     canvas.drawPath(arrow, stroke)
-
-    return BitmapDrawable(res, bmp)
+    return bmp
 }

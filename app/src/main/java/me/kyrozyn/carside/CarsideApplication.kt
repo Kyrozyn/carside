@@ -6,6 +6,7 @@ import coil.Coil
 import coil.ImageLoader
 import me.kyrozyn.carside.di.AppContainer
 import okhttp3.OkHttpClient
+import org.maplibre.android.MapLibre
 import org.osmdroid.config.Configuration
 
 class CarsideApplication : Application() {
@@ -15,6 +16,7 @@ class CarsideApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        MapLibre.getInstance(this)
         initOsmdroid()
         initCoil()
         container = AppContainer(this)
