@@ -1,7 +1,9 @@
 package me.kyrozyn.carside.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
@@ -17,17 +21,28 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import me.kyrozyn.carside.ui.apps.InstalledAppsLoader
+import me.kyrozyn.carside.ui.apps.LaunchableApp
 import me.kyrozyn.carside.ui.map.MapPane
 import me.kyrozyn.carside.ui.media.MediaPlayerPanel
 import me.kyrozyn.carside.ui.status.UnifiedDashboardStatusBar
@@ -47,6 +62,10 @@ fun DashboardScreen(
     onSeekTo: (Long) -> Unit,
     onOpenAppDrawer: () -> Unit,
     onSetUseGpsForwardMapBearing: (Boolean) -> Unit,
+    onLaunchShortcutApp: (String) -> Unit,
+    onOpenShortcutPicker: (Int) -> Unit,
+    onDismissShortcutPicker: () -> Unit,
+    onSelectShortcutApp: (slot: Int, packageName: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -62,7 +81,13 @@ fun DashboardScreen(
                 UnifiedDashboardStatusBar(
                     clockText = uiState.clockText,
                     compass = uiState.compass,
+                    shortcuts = uiState.shortcutPackages,
                     weather = uiState.weather,
+                    onShortcutClick = { slot ->
+                        val pkg = uiState.shortcutPackages.getOrNull(slot)
+                        if (pkg.isNullOrBlank()) onOpenShortcutPicker(slot) else onLaunchShortcutApp(pkg)
+                    },
+                    onShortcutLongPress = onOpenShortcutPicker,
                 )
             },
         ) { innerPadding ->
@@ -202,6 +227,91 @@ fun DashboardScreen(
             ) {
                 Text("Tutup", modifier = Modifier.fillMaxWidth())
             }
+        }
+    }
+
+    uiState.shortcutPickerSlot?.let { slot ->
+        ShortcutPickerSheet(
+            slot = slot,
+            onDismiss = onDismissShortcutPicker,
+            onSelect = { packageName -> onSelectShortcutApp(slot, packageName) },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ShortcutPickerSheet(
+    slot: Int,
+    onDismiss: () -> Unit,
+    onSelect: (String?) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val context = LocalContext.current
+    val pm = remember { context.packageManager }
+    var apps by remember { mutableStateOf<List<LaunchableApp>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        apps = withContext(Dispatchers.Default) {
+            InstalledAppsLoader.loadLaunchableApps(pm)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Text(
+            text = "Pilih aplikasi shortcut #${slot + 1}",
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        TextButton(
+            onClick = { onSelect(null) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            Text("Kosongkan slot", modifier = Modifier.fillMaxWidth())
+        }
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp),
+        ) {
+            items(apps, key = { it.packageName }) { app ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onSelect(app.packageName) },
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                        Text(
+                            text = app.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = app.packageName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            Text("Batal", modifier = Modifier.fillMaxWidth())
         }
     }
 }

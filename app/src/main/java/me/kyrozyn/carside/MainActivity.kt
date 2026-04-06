@@ -176,6 +176,18 @@ class MainActivity : ComponentActivity() {
                         onSeekTo = vm::onSeekTo,
                         onOpenAppDrawer = { showAppDrawer = true },
                         onSetUseGpsForwardMapBearing = vm::setUseGpsForwardMapBearing,
+                        onLaunchShortcutApp = { packageName ->
+                            packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
+                                launchIntent.addFlags(
+                                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED,
+                                )
+                                startActivity(launchIntent)
+                            }
+                        },
+                        onOpenShortcutPicker = vm::openShortcutPicker,
+                        onDismissShortcutPicker = vm::closeShortcutPicker,
+                        onSelectShortcutApp = vm::setShortcutPackage,
                     )
                 }
             }

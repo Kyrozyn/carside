@@ -1,7 +1,10 @@
 package me.kyrozyn.carside.ui.status
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
@@ -22,23 +26,29 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import me.kyrozyn.carside.domain.model.CompassHeading
 import me.kyrozyn.carside.ui.dashboard.WeatherUi
 
-// Warna ikon kompas — amber/oranye seperti jarum kompas asli
 private val CompassColor = Color(0xFFFFB300)
 
-/** Satu bar penuh: jam lokal | kompas | cuaca (di bawah peta + pemutar media). */
+/** Satu bar penuh: jam lokal | shortcut aplikasi | cuaca (di bawah peta + pemutar media). */
 @Composable
 fun UnifiedDashboardStatusBar(
     clockText: String,
     compass: CompassHeading,
+    shortcuts: List<String?>,
     weather: WeatherUi,
+    onShortcutClick: (Int) -> Unit,
+    onShortcutLongPress: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -68,7 +78,11 @@ fun UnifiedDashboardStatusBar(
                     .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                CompassSection(compass = compass)
+                ShortcutsSection(
+                    shortcuts = shortcuts,
+                    onShortcutClick = onShortcutClick,
+                    onShortcutLongPress = onShortcutLongPress,
+                )
             }
             StatusBarVerticalDivider()
             Box(
@@ -76,11 +90,43 @@ fun UnifiedDashboardStatusBar(
                     .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                WeatherSection(weather = weather)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CompassSection(compass = compass)
+                    Spacer(Modifier.width(10.dp))
+                    StatusBarVerticalDivider()
+                    Spacer(Modifier.width(10.dp))
+                    WeatherSection(weather = weather)
+                }
             }
         }
     }
 }
+@Composable
+private fun CompassSection(compass: CompassHeading) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            Icons.Outlined.Explore,
+            contentDescription = null,
+            tint = CompassColor,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Column {
+            Text(
+                text = compass.cardinal,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+            Text(
+                text = "${compass.degrees.toInt()}°",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+            )
+        }
+    }
+}
+
 
 @Composable
 private fun StatusBarVerticalDivider() {
@@ -132,27 +178,62 @@ private fun ClockStatusPill(clockText: String) {
 }
 
 @Composable
-private fun CompassSection(compass: CompassHeading) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            Icons.Outlined.Explore,
-            contentDescription = null,
-            tint = CompassColor,
-            modifier = Modifier.size(26.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Column {
-            Text(
-                text = compass.cardinal,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+private fun ShortcutsSection(
+    shortcuts: List<String?>,
+    onShortcutClick: (Int) -> Unit,
+    onShortcutLongPress: (Int) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(4) { index ->
+            ShortcutItem(
+                packageName = shortcuts.getOrNull(index),
+                onClick = { onShortcutClick(index) },
+                onLongClick = { onShortcutLongPress(index) },
             )
-            Text(
-                text = "${compass.degrees.toInt()}°",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-            )
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun ShortcutItem(
+    packageName: String?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val appIcon = remember(packageName) {
+        if (packageName.isNullOrBlank()) return@remember null
+        runCatching {
+            context.packageManager.getApplicationIcon(packageName).toBitmap(96, 96).asImageBitmap()
+        }.getOrNull()
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .padding(6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (appIcon != null) {
+                Image(bitmap = appIcon, contentDescription = null, modifier = Modifier.size(30.dp))
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Apps,
+                    contentDescription = "Pilih aplikasi shortcut",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    modifier = Modifier.size(22.dp),
+                )
+            }
         }
     }
 }
