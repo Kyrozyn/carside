@@ -54,6 +54,7 @@ fun DashboardScreen(
                 MapPane(
                     hasLocationPermission = uiState.locationPermissionGranted,
                     userLocation = uiState.userLocation,
+                    bearing = uiState.compass.degrees,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
