@@ -1,7 +1,7 @@
 package me.kyrozyn.carside.di
 
 import android.content.Context
-import me.kyrozyn.carside.data.compass.SensorCompassProvider
+import me.kyrozyn.carside.data.compass.GpsCompassProvider
 import me.kyrozyn.carside.data.connectivity.NetworkStatusTracker
 import me.kyrozyn.carside.data.location.FusedLocationDataSource
 import me.kyrozyn.carside.data.map.NoOpMapSession
@@ -22,7 +22,7 @@ class AppContainer(context: Context) {
     val weatherRepository: WeatherRepository = OpenMeteoWeatherRepository()
     val networkStatusTracker = NetworkStatusTracker(appContext)
     val mediaController: MediaController = SystemMediaSessionRepository(appContext)
-    val compassProvider: CompassProvider = SensorCompassProvider(appContext)
+    val compassProvider: CompassProvider = GpsCompassProvider(locationProvider)
     val mapSession: MapSession = NoOpMapSession()
     val settingsRepository = AppSettingsRepository(appContext)
 }
