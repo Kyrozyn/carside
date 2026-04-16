@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,8 +53,10 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.kyrozyn.carside.domain.model.InternetRadioState
 import me.kyrozyn.carside.ui.apps.InstalledAppsLoader
 import me.kyrozyn.carside.ui.apps.LaunchableApp
+import me.kyrozyn.carside.ui.internetradio.InternetRadioMiniPanel
 import me.kyrozyn.carside.ui.map.MapPane
 import me.kyrozyn.carside.ui.media.MediaPlayerPanel
 import me.kyrozyn.carside.ui.status.UnifiedDashboardStatusBar
@@ -71,6 +75,10 @@ fun DashboardScreen(
     onPrevious: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onOpenAppDrawer: () -> Unit,
+    onOpenRadio: () -> Unit,
+    onOpenInternetRadio: () -> Unit,
+    internetRadioState: InternetRadioState,
+    onStopInternetRadio: () -> Unit,
     onSetUseGpsForwardMapBearing: (Boolean) -> Unit,
     onLaunchShortcutApp: (String) -> Unit,
     onOpenShortcutPicker: (Int) -> Unit,
@@ -136,17 +144,26 @@ fun DashboardScreen(
                         .fillMaxHeight()
                         .background(MaterialTheme.colorScheme.surface),
                 ) {
-                    MediaPlayerPanel(
-                        state = uiState.media,
-                        notificationListenerEnabled = notificationListenerEnabled,
-                        onBrowseClick = onBrowseClick,
-                        onOpenNotificationAccessSettings = onOpenNotificationAccessSettings,
-                        onPlayPause = onPlayPause,
-                        onNext = onNext,
-                        onPrevious = onPrevious,
-                        onSeekTo = onSeekTo,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    if (internetRadioState.playing != null) {
+                        InternetRadioMiniPanel(
+                            state = internetRadioState,
+                            onOpenInternetRadio = onOpenInternetRadio,
+                            onStop = onStopInternetRadio,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        MediaPlayerPanel(
+                            state = uiState.media,
+                            notificationListenerEnabled = notificationListenerEnabled,
+                            onBrowseClick = onBrowseClick,
+                            onOpenNotificationAccessSettings = onOpenNotificationAccessSettings,
+                            onPlayPause = onPlayPause,
+                            onNext = onNext,
+                            onPrevious = onPrevious,
+                            onSeekTo = onSeekTo,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
             }
         }
@@ -166,6 +183,41 @@ fun DashboardScreen(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(26.dp),
             )
+        }
+
+        // Tombol Radio (pojok kanan atas): Radio Internet + Radio FM/AM
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            IconButton(
+                onClick = onOpenInternetRadio,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+            ) {
+                Icon(
+                    Icons.Default.Podcasts,
+                    contentDescription = "Radio Internet",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+            IconButton(
+                onClick = onOpenRadio,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+            ) {
+                Icon(
+                    Icons.Default.Radio,
+                    contentDescription = "Radio FM/AM",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
         }
     }
 

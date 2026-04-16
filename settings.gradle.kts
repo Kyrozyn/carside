@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Carside"
 include(":app")
+include(":radio-stubs")

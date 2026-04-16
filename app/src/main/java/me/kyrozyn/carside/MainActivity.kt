@@ -36,6 +36,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import me.kyrozyn.carside.ui.apps.AppDrawerScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardViewModel
+import me.kyrozyn.carside.ui.internetradio.InternetRadioScreen
+import me.kyrozyn.carside.ui.radio.RadioScreen
 import me.kyrozyn.carside.ui.theme.CarsideTheme
 
 class MainActivity : ComponentActivity() {
@@ -54,12 +56,15 @@ class MainActivity : ComponentActivity() {
             CarsideTheme {
                 val vm: DashboardViewModel = viewModel(factory = DashboardViewModel.factory(container))
                 val uiState by vm.uiState.collectAsStateWithLifecycle()
+                val internetRadioState by container.internetRadioController.state.collectAsStateWithLifecycle()
                 val context = LocalContext.current
                 val lifecycleOwner = LocalLifecycleOwner.current
 
                 var notificationListenerEnabled by remember { mutableStateOf(false) }
                 var showNotificationAccessDialog by remember { mutableStateOf(false) }
                 var showAppDrawer by remember { mutableStateOf(false) }
+                var showRadio by remember { mutableStateOf(false) }
+                var showInternetRadio by remember { mutableStateOf(false) }
 
                 DisposableEffect(lifecycleOwner) {
                     val syncAccess: () -> Unit = {
@@ -156,6 +161,16 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                     )
+                } else if (showRadio) {
+                    RadioScreen(
+                        container = container,
+                        onBack = { showRadio = false },
+                    )
+                } else if (showInternetRadio) {
+                    InternetRadioScreen(
+                        container = container,
+                        onBack = { showInternetRadio = false },
+                    )
                 } else {
                     DashboardScreen(
                         uiState = uiState,
@@ -175,6 +190,10 @@ class MainActivity : ComponentActivity() {
                         onPrevious = vm::onPrevious,
                         onSeekTo = vm::onSeekTo,
                         onOpenAppDrawer = { showAppDrawer = true },
+                        onOpenRadio = { showRadio = true },
+                        onOpenInternetRadio = { showInternetRadio = true },
+                        internetRadioState = internetRadioState,
+                        onStopInternetRadio = { container.internetRadioController.stop() },
                         onSetUseGpsForwardMapBearing = vm::setUseGpsForwardMapBearing,
                         onLaunchShortcutApp = { packageName ->
                             packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->

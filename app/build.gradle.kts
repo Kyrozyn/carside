@@ -43,6 +43,8 @@ android {
 }
 
 dependencies {
+    compileOnly(project(":radio-stubs"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
@@ -63,6 +65,10 @@ dependencies {
 
     implementation(libs.okhttp)
     implementation(libs.coil.compose)
+
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.exoplayer.hls)
+    implementation(libs.androidx.media3.datasource.okhttp)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 
