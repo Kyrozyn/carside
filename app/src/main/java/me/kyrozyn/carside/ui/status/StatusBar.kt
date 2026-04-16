@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -40,11 +41,14 @@ import me.kyrozyn.carside.domain.model.CompassHeading
 import me.kyrozyn.carside.ui.dashboard.WeatherUi
 
 private val CompassColor = Color(0xFFFFB300)
+private val SpeedColor = Color(0xFF26A69A)
 
 /** Satu bar penuh: jam lokal | shortcut aplikasi | cuaca (di bawah peta + pemutar media). */
 @Composable
 fun UnifiedDashboardStatusBar(
     clockText: String,
+    /** Kecepatan dari GPS (m/s); null jika belum ada atau tidak tersedia. */
+    gpsSpeedMps: Float?,
     compass: CompassHeading,
     shortcuts: List<String?>,
     weather: WeatherUi,
@@ -72,7 +76,16 @@ fun UnifiedDashboardStatusBar(
                     .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                ClockStatusPill(clockText = clockText)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    ClockStatusPill(clockText = clockText)
+                    Spacer(Modifier.width(10.dp))
+                    StatusBarVerticalDivider()
+                    Spacer(Modifier.width(10.dp))
+                    GpsSpeedSection(speedMps = gpsSpeedMps)
+                }
             }
             StatusBarVerticalDivider()
             Box(
@@ -105,6 +118,33 @@ fun UnifiedDashboardStatusBar(
         }
     }
 }
+@Composable
+private fun GpsSpeedSection(speedMps: Float?) {
+    val kmh = speedMps?.let { it * 3.6f }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            Icons.Outlined.Speed,
+            contentDescription = null,
+            tint = SpeedColor,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Column {
+            Text(
+                text = if (kmh != null) "${kmh.toInt()} km/h" else "—",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+            Text(
+                text = "Kecepatan GPS",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+            )
+        }
+    }
+}
+
 @Composable
 private fun CompassSection(compass: CompassHeading) {
     Row(verticalAlignment = Alignment.CenterVertically) {

@@ -107,6 +107,7 @@ fun DashboardScreen(
             bottomBar = {
                 UnifiedDashboardStatusBar(
                     clockText = uiState.clockText,
+                    gpsSpeedMps = uiState.userLocation?.speedMps,
                     compass = uiState.compass,
                     shortcuts = uiState.shortcutPackages,
                     weather = uiState.weather,

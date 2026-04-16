@@ -42,6 +42,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_DARK_STYLE_URL
 import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_LIBERTY_STYLE_URL
 import me.kyrozyn.carside.domain.model.GeoLocation
 import org.maplibre.android.camera.CameraPosition
@@ -81,10 +82,16 @@ private val GOOGLE_TRAFFIC_TILE_URLS = arrayOf(
 private enum class MapStyle {
     /** Google raster + traffic */
     GOOGLE,
-    /** OpenFreeMap vector + overlay traffic Google (opacity ringan) */
+    /** Google raster + traffic, tampilan lebih gelap (paint raster) */
+    GOOGLE_DARK,
+    /** OpenFreeMap Liberty + overlay traffic Google */
     OSM_GOOGLE_TRAFFIC,
-    /** OpenFreeMap vector saja */
+    /** OpenFreeMap dark + overlay traffic Google */
+    OSM_GOOGLE_TRAFFIC_DARK,
+    /** OpenFreeMap Liberty */
     OSM,
+    /** OpenFreeMap dark */
+    OSM_DARK,
 }
 
 // Style JSON untuk Google Maps raster + traffic — teks tidak dirotasi karena raster
@@ -107,6 +114,36 @@ private val GOOGLE_STYLE_JSON = """
     "id": "google-traffic-layer",
     "type": "raster",
     "source": "google-traffic"
+  }]
+}
+""".trimIndent()
+
+// Google + traffic dengan raster dipergelap (night-style tanpa API Google resmi)
+private val GOOGLE_DARK_STYLE_JSON = """
+{
+  "version": 8,
+  "sources": {
+    "google-traffic": {
+      "type": "raster",
+      "tiles": [
+        "https://mt0.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
+        "https://mt1.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
+        "https://mt2.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
+        "https://mt3.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}"
+      ],
+      "tileSize": 256
+    }
+  },
+  "layers": [{
+    "id": "google-traffic-layer",
+    "type": "raster",
+    "source": "google-traffic",
+    "paint": {
+      "raster-brightness-min": 0.0,
+      "raster-brightness-max": 0.35,
+      "raster-contrast": 0.25,
+      "raster-saturation": -0.45
+    }
   }]
 }
 """.trimIndent()
@@ -211,9 +248,12 @@ fun MapPane(
                 currentStyle = mapStyle,
                 onClick = {
                     mapStyle = when (mapStyle) {
-                        MapStyle.GOOGLE -> MapStyle.OSM_GOOGLE_TRAFFIC
-                        MapStyle.OSM_GOOGLE_TRAFFIC -> MapStyle.OSM
-                        MapStyle.OSM -> MapStyle.GOOGLE
+                        MapStyle.GOOGLE -> MapStyle.GOOGLE_DARK
+                        MapStyle.GOOGLE_DARK -> MapStyle.OSM_GOOGLE_TRAFFIC
+                        MapStyle.OSM_GOOGLE_TRAFFIC -> MapStyle.OSM_GOOGLE_TRAFFIC_DARK
+                        MapStyle.OSM_GOOGLE_TRAFFIC_DARK -> MapStyle.OSM
+                        MapStyle.OSM -> MapStyle.OSM_DARK
+                        MapStyle.OSM_DARK -> MapStyle.GOOGLE
                     }
                 },
             )
@@ -262,16 +302,20 @@ private fun loadMapStyle(
     val dotBitmap = locationDotBitmap(72)
     val styleUri = when (style) {
         MapStyle.GOOGLE -> Style.Builder().fromJson(GOOGLE_STYLE_JSON)
+        MapStyle.GOOGLE_DARK -> Style.Builder().fromJson(GOOGLE_DARK_STYLE_JSON)
         MapStyle.OSM_GOOGLE_TRAFFIC,
         MapStyle.OSM,
         -> Style.Builder().fromUri(OPEN_FREE_MAP_LIBERTY_STYLE_URL)
+        MapStyle.OSM_GOOGLE_TRAFFIC_DARK,
+        MapStyle.OSM_DARK,
+        -> Style.Builder().fromUri(OPEN_FREE_MAP_DARK_STYLE_URL)
     }
 
     map.setStyle(styleUri) { loadedStyle ->
         loadedStyle.addImage(LOCATION_ICON_ID, dotBitmap)
 
-        // OSM + traffic: overlay raster Google 20% di atas vector OpenFreeMap
-        if (style == MapStyle.OSM_GOOGLE_TRAFFIC) {
+        // OSM + traffic: overlay raster Google 20% di atas vector OpenFreeMap (terang atau dark)
+        if (style == MapStyle.OSM_GOOGLE_TRAFFIC || style == MapStyle.OSM_GOOGLE_TRAFFIC_DARK) {
             if (loadedStyle.getSource(OSM_TRAFFIC_SOURCE_ID) == null) {
                 val tileSet = TileSet("2.1.0", *GOOGLE_TRAFFIC_TILE_URLS)
                 loadedStyle.addSource(RasterSource(OSM_TRAFFIC_SOURCE_ID, tileSet, 256))
@@ -289,7 +333,16 @@ private fun loadMapStyle(
             loadedStyle.addSource(GeoJsonSource(LOCATION_SOURCE_ID))
         }
         if (loadedStyle.getLayer(LOCATION_LAYER_ID) == null) {
-            val useMapRotation = style == MapStyle.OSM || style == MapStyle.OSM_GOOGLE_TRAFFIC
+            val useMapRotation = when (style) {
+                MapStyle.GOOGLE,
+                MapStyle.GOOGLE_DARK,
+                -> false
+                MapStyle.OSM,
+                MapStyle.OSM_DARK,
+                MapStyle.OSM_GOOGLE_TRAFFIC,
+                MapStyle.OSM_GOOGLE_TRAFFIC_DARK,
+                -> true
+            }
             loadedStyle.addLayer(
                 SymbolLayer(LOCATION_LAYER_ID, LOCATION_SOURCE_ID).withProperties(
                     iconImage(LOCATION_ICON_ID),
@@ -322,9 +375,13 @@ private fun applyLocationAndBearing(
 
     // Kamera: mode vector OSM ikut kompas; Google north-up
     val cameraBearing = when (mode) {
-        MapStyle.GOOGLE -> 0.0
+        MapStyle.GOOGLE,
+        MapStyle.GOOGLE_DARK,
+        -> 0.0
         MapStyle.OSM_GOOGLE_TRAFFIC,
+        MapStyle.OSM_GOOGLE_TRAFFIC_DARK,
         MapStyle.OSM,
+        MapStyle.OSM_DARK,
         -> bearing.toDouble()
     }
 
@@ -345,16 +402,22 @@ private fun applyLocationAndBearing(
 
 @Composable
 private fun MapLayerSwitchButton(currentStyle: MapStyle, onClick: () -> Unit) {
-    val isGoogle = currentStyle == MapStyle.GOOGLE
+    val isGoogle = currentStyle == MapStyle.GOOGLE || currentStyle == MapStyle.GOOGLE_DARK
     val (label, labelSp) = when (currentStyle) {
         MapStyle.GOOGLE -> "G" to 10.sp
-        MapStyle.OSM_GOOGLE_TRAFFIC -> "OSMG" to 7.sp
+        MapStyle.GOOGLE_DARK -> "GD" to 9.sp
+        MapStyle.OSM_GOOGLE_TRAFFIC -> "OSMG" to 6.sp
+        MapStyle.OSM_GOOGLE_TRAFFIC_DARK -> "OSMGD" to 5.5.sp
         MapStyle.OSM -> "OSM" to 8.sp
+        MapStyle.OSM_DARK -> "OSMD" to 7.sp
     }
     val desc = when (currentStyle) {
         MapStyle.GOOGLE -> "Google Maps + traffic"
+        MapStyle.GOOGLE_DARK -> "Google Maps + traffic (gelap)"
         MapStyle.OSM_GOOGLE_TRAFFIC -> "OpenStreetMap + traffic"
+        MapStyle.OSM_GOOGLE_TRAFFIC_DARK -> "OpenStreetMap dark + traffic"
         MapStyle.OSM -> "OpenStreetMap"
+        MapStyle.OSM_DARK -> "OpenStreetMap dark"
     }
     Box(
         modifier = Modifier
