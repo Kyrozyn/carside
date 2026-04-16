@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,7 +51,6 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
-import org.maplibre.android.style.layers.PropertyFactory.iconRotate
 import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
 import org.maplibre.android.style.layers.PropertyFactory.iconSize
 import org.maplibre.android.style.layers.PropertyFactory.rasterOpacity
@@ -67,7 +65,7 @@ import org.maplibre.geojson.Point
 private const val FOLLOW_ZOOM = 17.0
 private const val LOCATION_SOURCE_ID = "location-source"
 private const val LOCATION_LAYER_ID = "location-layer"
-private const val LOCATION_ICON_ID = "location-arrow"
+private const val LOCATION_ICON_ID = "location-dot"
 private const val OSM_TRAFFIC_SOURCE_ID = "osm-google-traffic-source"
 private const val OSM_TRAFFIC_LAYER_ID = "osm-google-traffic-layer"
 
@@ -254,7 +252,7 @@ private fun loadMapStyle(
     mapState: MapState,
     context: android.content.Context,
 ) {
-    val arrowBitmap = locationArrowBitmap(72)
+    val dotBitmap = locationDotBitmap(72)
     val styleUri = when (style) {
         MapStyle.GOOGLE -> Style.Builder().fromJson(GOOGLE_STYLE_JSON)
         MapStyle.OSM_GOOGLE_TRAFFIC,
@@ -263,7 +261,7 @@ private fun loadMapStyle(
     }
 
     map.setStyle(styleUri) { loadedStyle ->
-        loadedStyle.addImage(LOCATION_ICON_ID, arrowBitmap)
+        loadedStyle.addImage(LOCATION_ICON_ID, dotBitmap)
 
         // OSM + traffic: overlay raster Google 20% di atas vector OpenFreeMap
         if (style == MapStyle.OSM_GOOGLE_TRAFFIC) {
@@ -314,9 +312,6 @@ private fun applyLocationAndBearing(
     val mapStyleObj = map.style ?: return
     (mapStyleObj.getSource(LOCATION_SOURCE_ID) as? GeoJsonSource)
         ?.setGeoJson(Feature.fromGeometry(Point.fromLngLat(loc.longitude, loc.latitude)))
-
-    (mapStyleObj.getLayer(LOCATION_LAYER_ID) as? SymbolLayer)
-        ?.setProperties(iconRotate(bearing))
 
     // Kamera: mode vector OSM ikut kompas; Google north-up
     val cameraBearing = when (mode) {
@@ -408,36 +403,23 @@ private fun MapControlButton(
     }
 }
 
-private fun locationArrowBitmap(sizePx: Int): Bitmap {
+/** Titik lokasi seperti Google Maps: lingkaran biru dengan halo putih. */
+private fun locationDotBitmap(sizePx: Int): Bitmap {
     val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
-
-    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        color = Color.parseColor("#2196F3")
-    }
-    val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = sizePx * 0.10f
-        strokeJoin = Paint.Join.ROUND
-        color = Color.WHITE
-    }
-
     val cx = sizePx / 2f
     val cy = sizePx / 2f
-    val tip = cy * 0.10f
-    val baseY = cy * 1.85f
-    val halfBase = cx * 0.58f
-    val notch = cy * 1.42f
-
-    val arrow = Path().apply {
-        moveTo(cx, tip)
-        lineTo(cx + halfBase, baseY)
-        lineTo(cx, notch)
-        lineTo(cx - halfBase, baseY)
-        close()
+    val outer = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.WHITE
     }
-    canvas.drawPath(arrow, fill)
-    canvas.drawPath(arrow, stroke)
+    val inner = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.parseColor("#4285F4")
+    }
+    val outerR = sizePx * 0.42f
+    val innerR = sizePx * 0.30f
+    canvas.drawCircle(cx, cy, outerR, outer)
+    canvas.drawCircle(cx, cy, innerR, inner)
     return bmp
 }
