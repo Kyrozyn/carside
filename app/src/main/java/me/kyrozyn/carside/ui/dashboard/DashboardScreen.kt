@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -47,12 +49,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.kyrozyn.carside.domain.model.ActiveOfflineDownload
 import me.kyrozyn.carside.domain.model.InternetRadioState
 import me.kyrozyn.carside.ui.apps.InstalledAppsLoader
 import me.kyrozyn.carside.ui.apps.LaunchableApp
@@ -77,6 +81,7 @@ fun DashboardScreen(
     onOpenAppDrawer: () -> Unit,
     onOpenRadio: () -> Unit,
     onOpenInternetRadio: () -> Unit,
+    onOpenOfflineMaps: () -> Unit,
     internetRadioState: InternetRadioState,
     onStopInternetRadio: () -> Unit,
     onSetUseGpsForwardMapBearing: (Boolean) -> Unit,
@@ -86,6 +91,8 @@ fun DashboardScreen(
     onSelectShortcutApp: (slot: Int, packageName: String?) -> Unit,
     onOpenWeatherDetails: () -> Unit,
     onCloseWeatherDetails: () -> Unit,
+    /** Unduhan peta offline aktif (background); banner tipis di atas peta. */
+    offlineDownloadActive: ActiveOfflineDownload? = null,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -127,6 +134,7 @@ fun DashboardScreen(
                         hasLocationPermission = uiState.locationPermissionGranted,
                         userLocation = uiState.userLocation,
                         bearing = uiState.mapBearingDegrees,
+                        onOpenOfflineMaps = onOpenOfflineMaps,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -163,6 +171,42 @@ fun DashboardScreen(
                             onSeekTo = onSeekTo,
                             modifier = Modifier.fillMaxSize(),
                         )
+                    }
+                }
+            }
+        }
+
+        offlineDownloadActive?.let { active ->
+            val prog = active.progress
+            val p = if (prog.requiredResourceCount > 0) {
+                (prog.completedResourceCount.toFloat() / prog.requiredResourceCount.toFloat()).coerceIn(0f, 1f)
+            } else {
+                null
+            }
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth(0.88f)
+                    .padding(top = 8.dp),
+                shape = RoundedCornerShape(12.dp),
+                tonalElevation = 4.dp,
+                shadowElevation = 2.dp,
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Text(
+                        text = "Unduh peta offline: ${active.label}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    if (p != null) {
+                        LinearProgressIndicator(
+                            progress = { p },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                 }
             }

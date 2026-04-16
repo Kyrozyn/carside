@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Remove
@@ -41,6 +42,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_LIBERTY_STYLE_URL
 import me.kyrozyn.carside.domain.model.GeoLocation
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -110,7 +112,6 @@ private val GOOGLE_STYLE_JSON = """
 """.trimIndent()
 
 // Vector tiles OpenFreeMap — teks tetap tegak saat dirotasi
-private const val OSM_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
 
 private class MapState {
     var map: MapLibreMap? = null
@@ -125,6 +126,7 @@ fun MapPane(
     hasLocationPermission: Boolean,
     userLocation: GeoLocation?,
     bearing: Float = 0f,
+    onOpenOfflineMaps: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -216,6 +218,11 @@ fun MapPane(
                 },
             )
             MapControlButton(
+                icon = Icons.Default.Download,
+                contentDescription = "Peta offline",
+                onClick = onOpenOfflineMaps,
+            )
+            MapControlButton(
                 icon = Icons.Default.Add,
                 contentDescription = "Perbesar",
                 onClick = { mapState.map?.animateCamera(CameraUpdateFactory.zoomIn()) },
@@ -257,7 +264,7 @@ private fun loadMapStyle(
         MapStyle.GOOGLE -> Style.Builder().fromJson(GOOGLE_STYLE_JSON)
         MapStyle.OSM_GOOGLE_TRAFFIC,
         MapStyle.OSM,
-        -> Style.Builder().fromUri(OSM_STYLE_URL)
+        -> Style.Builder().fromUri(OPEN_FREE_MAP_LIBERTY_STYLE_URL)
     }
 
     map.setStyle(styleUri) { loadedStyle ->

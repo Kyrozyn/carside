@@ -4,6 +4,7 @@ import android.content.Context
 import me.kyrozyn.carside.data.compass.GpsCompassProvider
 import me.kyrozyn.carside.data.connectivity.NetworkStatusTracker
 import me.kyrozyn.carside.data.internetradio.InternetRadioControllerImpl
+import me.kyrozyn.carside.data.offline.OfflineMapsRepository
 import me.kyrozyn.carside.data.location.FusedLocationDataSource
 import me.kyrozyn.carside.data.map.NoOpMapSession
 import me.kyrozyn.carside.data.media.SystemMediaSessionRepository
@@ -30,6 +31,7 @@ class AppContainer(context: Context) {
     val compassProvider: CompassProvider = GpsCompassProvider(locationProvider)
     val mapSession: MapSession = NoOpMapSession()
     val settingsRepository = AppSettingsRepository(appContext)
+    val offlineMapsRepository = OfflineMapsRepository(appContext)
     val radioController: RadioController = runCatching {
         HardwareRadioController(appContext, settingsRepository)
     }.getOrElse {

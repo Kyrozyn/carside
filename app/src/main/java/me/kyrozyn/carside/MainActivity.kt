@@ -37,6 +37,8 @@ import me.kyrozyn.carside.ui.apps.AppDrawerScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardViewModel
 import me.kyrozyn.carside.ui.internetradio.InternetRadioScreen
+import me.kyrozyn.carside.ui.offlinemaps.AddOfflineMapScreen
+import me.kyrozyn.carside.ui.offlinemaps.OfflineMapsScreen
 import me.kyrozyn.carside.ui.radio.RadioScreen
 import me.kyrozyn.carside.ui.theme.CarsideTheme
 
@@ -57,6 +59,7 @@ class MainActivity : ComponentActivity() {
                 val vm: DashboardViewModel = viewModel(factory = DashboardViewModel.factory(container))
                 val uiState by vm.uiState.collectAsStateWithLifecycle()
                 val internetRadioState by container.internetRadioController.state.collectAsStateWithLifecycle()
+                val offlineDownloadActive by container.offlineMapsRepository.activeDownload.collectAsStateWithLifecycle()
                 val context = LocalContext.current
                 val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -65,6 +68,8 @@ class MainActivity : ComponentActivity() {
                 var showAppDrawer by remember { mutableStateOf(false) }
                 var showRadio by remember { mutableStateOf(false) }
                 var showInternetRadio by remember { mutableStateOf(false) }
+                var showOfflineMaps by remember { mutableStateOf(false) }
+                var showOfflineMapAdd by remember { mutableStateOf(false) }
 
                 DisposableEffect(lifecycleOwner) {
                     val syncAccess: () -> Unit = {
@@ -171,6 +176,22 @@ class MainActivity : ComponentActivity() {
                         container = container,
                         onBack = { showInternetRadio = false },
                     )
+                } else if (showOfflineMaps) {
+                    if (showOfflineMapAdd) {
+                        AddOfflineMapScreen(
+                            container = container,
+                            onBack = { showOfflineMapAdd = false },
+                        )
+                    } else {
+                        OfflineMapsScreen(
+                            container = container,
+                            onBack = {
+                                showOfflineMaps = false
+                                showOfflineMapAdd = false
+                            },
+                            onNavigateToAdd = { showOfflineMapAdd = true },
+                        )
+                    }
                 } else {
                     DashboardScreen(
                         uiState = uiState,
@@ -192,6 +213,7 @@ class MainActivity : ComponentActivity() {
                         onOpenAppDrawer = { showAppDrawer = true },
                         onOpenRadio = { showRadio = true },
                         onOpenInternetRadio = { showInternetRadio = true },
+                        onOpenOfflineMaps = { showOfflineMaps = true },
                         internetRadioState = internetRadioState,
                         onStopInternetRadio = { container.internetRadioController.stop() },
                         onSetUseGpsForwardMapBearing = vm::setUseGpsForwardMapBearing,
@@ -209,6 +231,7 @@ class MainActivity : ComponentActivity() {
                         onSelectShortcutApp = vm::setShortcutPackage,
                         onOpenWeatherDetails = vm::openWeatherDetails,
                         onCloseWeatherDetails = vm::closeWeatherDetails,
+                        offlineDownloadActive = offlineDownloadActive,
                     )
                 }
             }

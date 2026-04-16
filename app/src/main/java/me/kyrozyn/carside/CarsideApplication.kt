@@ -7,6 +7,7 @@ import coil.ImageLoader
 import me.kyrozyn.carside.di.AppContainer
 import okhttp3.OkHttpClient
 import org.maplibre.android.MapLibre
+import org.maplibre.android.offline.OfflineManager
 import org.osmdroid.config.Configuration
 
 class CarsideApplication : Application() {
@@ -17,6 +18,7 @@ class CarsideApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         MapLibre.getInstance(this)
+        OfflineManager.getInstance(this).setOfflineMapboxTileCountLimit(200_000L)
         initOsmdroid()
         initCoil()
         container = AppContainer(this)
