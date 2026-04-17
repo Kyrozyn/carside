@@ -5,11 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import kotlin.math.asin
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
+import me.kyrozyn.carside.core.geo.haversineMeters
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +23,8 @@ import kotlinx.coroutines.delay
 import me.kyrozyn.carside.di.AppContainer
 import me.kyrozyn.carside.domain.model.CompassHeading
 import me.kyrozyn.carside.domain.model.GeoLocation
+import me.kyrozyn.carside.domain.model.TripTrackerPhase
+import me.kyrozyn.carside.domain.model.TripTrackerState
 import me.kyrozyn.carside.domain.model.WeatherSummary
 import me.kyrozyn.carside.domain.repository.MediaPlaybackState
 
@@ -56,6 +54,8 @@ data class DashboardUiState(
     val locationPermissionGranted: Boolean,
     /** Lokasi terakhir dari Fused Location — untuk peta mengikuti posisi Anda. */
     val userLocation: GeoLocation?,
+    /** Status trip otomatis (GPS). */
+    val activeTrip: TripTrackerState,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -109,7 +109,8 @@ class DashboardViewModel(
             Quadruple(compass, browse, perm, useGps)
         },
         _userLocation,
-    ) { mediaClock, shortcutsState, compassBrowsePermMode, userLoc ->
+        container.tripRepository.activeTripState,
+    ) { mediaClock, shortcutsState, compassBrowsePermMode, userLoc, activeTrip ->
         val compass = compassBrowsePermMode.first
         val mode = if (compassBrowsePermMode.fourth) MapRotationMode.FORWARD_GPS else MapRotationMode.COMPASS
         val mapBearing = when (mode) {
@@ -129,6 +130,7 @@ class DashboardViewModel(
             browseOpen = compassBrowsePermMode.second,
             locationPermissionGranted = compassBrowsePermMode.third,
             userLocation = userLoc,
+            activeTrip = activeTrip,
         )
     }.stateIn(
         viewModelScope,
@@ -146,6 +148,12 @@ class DashboardViewModel(
             browseOpen = false,
             locationPermissionGranted = false,
             userLocation = null,
+            activeTrip = TripTrackerState(
+                phase = TripTrackerPhase.Idle,
+                currentDistanceMeters = 0.0,
+                currentDurationSeconds = 0L,
+                maxSpeedMps = null,
+            ),
         ),
     )
 
@@ -214,6 +222,7 @@ class DashboardViewModel(
 
     fun setLocationPermissionGranted(granted: Boolean) {
         _locationPermission.value = granted
+        container.tripRepository.setTrackingEnabled(granted)
     }
 
     fun setBrowseOpen(open: Boolean) {
@@ -255,6 +264,12 @@ class DashboardViewModel(
     fun onPrevious() = container.mediaController.skipPrevious()
 
     fun onSeekTo(positionMs: Long) = container.mediaController.seekTo(positionMs)
+
+    fun stopActiveTrip() {
+        viewModelScope.launch {
+            container.tripRepository.stopActiveTrip()
+        }
+    }
 
     companion object {
         private const val WEATHER_REFRESH_DISTANCE_METERS = 1_000.0
@@ -300,15 +315,6 @@ class DashboardViewModel(
         return distance >= WEATHER_REFRESH_DISTANCE_METERS
     }
 
-    private fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val r = 6_371_000.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2).pow(2.0) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2.0)
-        val c = 2.0 * asin(sqrt(a))
-        return r * c
-    }
 }
 
 private data class Quadruple<A, B, C, D>(

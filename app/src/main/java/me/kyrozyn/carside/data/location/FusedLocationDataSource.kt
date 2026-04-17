@@ -30,6 +30,7 @@ class FusedLocationDataSource(context: Context) : LocationProvider {
                         longitude = loc.longitude,
                         bearingDegrees = loc.bearing.takeIf { loc.hasBearing() },
                         speedMps = loc.speed.takeIf { loc.hasSpeed() },
+                        accuracyMeters = loc.accuracy.takeIf { loc.hasAccuracy() },
                     ),
                 )
             }
@@ -49,6 +50,7 @@ class FusedLocationDataSource(context: Context) : LocationProvider {
                         longitude = loc.longitude,
                         bearingDegrees = loc.bearing.takeIf { loc.hasBearing() },
                         speedMps = loc.speed.takeIf { loc.hasSpeed() },
+                        accuracyMeters = loc.accuracy.takeIf { loc.hasAccuracy() },
                     ),
                 )
             }

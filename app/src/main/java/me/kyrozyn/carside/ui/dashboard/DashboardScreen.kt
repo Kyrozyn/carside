@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material3.Icon
@@ -58,6 +59,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.kyrozyn.carside.domain.model.ActiveOfflineDownload
 import me.kyrozyn.carside.domain.model.InternetRadioState
+import me.kyrozyn.carside.domain.model.TripTrackerPhase
 import me.kyrozyn.carside.ui.apps.InstalledAppsLoader
 import me.kyrozyn.carside.ui.apps.LaunchableApp
 import me.kyrozyn.carside.ui.internetradio.InternetRadioMiniPanel
@@ -93,6 +95,8 @@ fun DashboardScreen(
     onCloseWeatherDetails: () -> Unit,
     /** Unduhan peta offline aktif (background); banner tipis di atas peta. */
     offlineDownloadActive: ActiveOfflineDownload? = null,
+    onOpenGarage: () -> Unit = {},
+    onStopTrip: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -230,38 +234,114 @@ fun DashboardScreen(
             )
         }
 
-        // Tombol Radio (pojok kanan atas): Radio Internet + Radio FM/AM
-        Row(
+        // Tombol Garage + Radio (pojok kanan atas)
+        Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            IconButton(
-                onClick = onOpenInternetRadio,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
-            ) {
-                Icon(
-                    Icons.Default.Podcasts,
-                    contentDescription = "Radio Internet",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(26.dp),
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(
+                    onClick = onOpenGarage,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                ) {
+                    Icon(
+                        Icons.Default.LocalGasStation,
+                        contentDescription = "Garage — Trip & BBM",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+                IconButton(
+                    onClick = onOpenInternetRadio,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                ) {
+                    Icon(
+                        Icons.Default.Podcasts,
+                        contentDescription = "Radio Internet",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+                IconButton(
+                    onClick = onOpenRadio,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                ) {
+                    Icon(
+                        Icons.Default.Radio,
+                        contentDescription = "Radio FM/AM",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
             }
-            IconButton(
-                onClick = onOpenRadio,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
-            ) {
-                Icon(
-                    Icons.Default.Radio,
-                    contentDescription = "Radio FM/AM",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(26.dp),
-                )
+            val trip = uiState.activeTrip
+            val showTripChip = trip.phase == TripTrackerPhase.Active ||
+                trip.phase == TripTrackerPhase.Cooldown
+            if (showTripChip) {
+                val km = trip.currentDistanceMeters / 1000.0
+                val sec = trip.currentDurationSeconds
+                val h = sec / 3600
+                val m = (sec % 3600) / 60
+                val s = sec % 60
+                val timeStr = if (h > 0) {
+                    "%d:%02d:%02d".format(h, m, s)
+                } else {
+                    "%d:%02d".format(m, s)
+                }
+                Surface(
+                    shape = RoundedCornerShape(22.dp),
+                    tonalElevation = 4.dp,
+                    shadowElevation = 3.dp,
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            text = "🚗",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                            Text(
+                                text = "Perjalanan GPS sedang direkam",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                            Text(
+                                text = "Jarak perkiraan (bukan odometer): ${"%.2f".format(km)} km",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.95f),
+                            )
+                            Text(
+                                text = "Lama berkendara sejak deteksi mulai: $timeStr",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.88f),
+                            )
+                        }
+                        TextButton(
+                            onClick = onStopTrip,
+                            modifier = Modifier.height(40.dp),
+                        ) {
+                            Text(
+                                "⏹ Selesai & simpan",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
             }
         }
     }

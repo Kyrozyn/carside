@@ -37,6 +37,7 @@ import me.kyrozyn.carside.ui.apps.AppDrawerScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardViewModel
 import me.kyrozyn.carside.ui.internetradio.InternetRadioScreen
+import me.kyrozyn.carside.ui.garage.GarageScreen
 import me.kyrozyn.carside.ui.offlinemaps.AddOfflineMapScreen
 import me.kyrozyn.carside.ui.offlinemaps.OfflineMapsScreen
 import me.kyrozyn.carside.ui.radio.RadioScreen
@@ -70,6 +71,7 @@ class MainActivity : ComponentActivity() {
                 var showInternetRadio by remember { mutableStateOf(false) }
                 var showOfflineMaps by remember { mutableStateOf(false) }
                 var showOfflineMapAdd by remember { mutableStateOf(false) }
+                var showGarage by remember { mutableStateOf(false) }
 
                 DisposableEffect(lifecycleOwner) {
                     val syncAccess: () -> Unit = {
@@ -176,6 +178,11 @@ class MainActivity : ComponentActivity() {
                         container = container,
                         onBack = { showInternetRadio = false },
                     )
+                } else if (showGarage) {
+                    GarageScreen(
+                        container = container,
+                        onBack = { showGarage = false },
+                    )
                 } else if (showOfflineMaps) {
                     if (showOfflineMapAdd) {
                         AddOfflineMapScreen(
@@ -214,6 +221,8 @@ class MainActivity : ComponentActivity() {
                         onOpenRadio = { showRadio = true },
                         onOpenInternetRadio = { showInternetRadio = true },
                         onOpenOfflineMaps = { showOfflineMaps = true },
+                        onOpenGarage = { showGarage = true },
+                        onStopTrip = vm::stopActiveTrip,
                         internetRadioState = internetRadioState,
                         onStopInternetRadio = { container.internetRadioController.stop() },
                         onSetUseGpsForwardMapBearing = vm::setUseGpsForwardMapBearing,

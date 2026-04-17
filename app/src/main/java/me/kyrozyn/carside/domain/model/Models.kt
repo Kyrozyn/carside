@@ -9,6 +9,8 @@ data class GeoLocation(
     val bearingDegrees: Float? = null,
     /** Kecepatan dari GPS dalam meter/detik jika tersedia. */
     val speedMps: Float? = null,
+    /** Akurasi horizontal GPS (meter); null jika tidak tersedia. */
+    val accuracyMeters: Float? = null,
 )
 
 data class TrackInfo(
