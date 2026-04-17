@@ -8,25 +8,36 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,12 +46,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import me.kyrozyn.carside.data.location.reverseGeocodeStreetDescription
 import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_DARK_STYLE_URL
 import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_LIBERTY_STYLE_URL
 import me.kyrozyn.carside.domain.model.GeoLocation
@@ -63,6 +78,10 @@ import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.TileSet
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.Point
+
+private const val FAB_STREET_MAX_CHARS = 30
+/** Jeda antar pembaruan nama jalan di FAB (gerak GPS tidak memicu geocode berulang). */
+private const val STREET_GEOCODE_INTERVAL_MS = 60_000L
 
 private const val FOLLOW_ZOOM = 17.0
 private const val LOCATION_SOURCE_ID = "location-source"
@@ -157,6 +176,7 @@ private class MapState {
     var didInitialZoom: Boolean = false
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapPane(
     hasLocationPermission: Boolean,
@@ -166,12 +186,21 @@ fun MapPane(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
 
     var mapStyle by remember { mutableStateOf(MapStyle.GOOGLE) }
+    var showStreetSheet by remember { mutableStateOf(false) }
+    var streetLoading by remember { mutableStateOf(false) }
+    var streetResult by remember { mutableStateOf<String?>(null) }
+    var streetError by remember { mutableStateOf<String?>(null) }
+    var fabStreetLabel by remember { mutableStateOf("—") }
+    val streetSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val mapState = remember { MapState() }
     val currentLocation by rememberUpdatedState(userLocation)
     val currentBearing by rememberUpdatedState(bearing)
     val currentStyle by rememberUpdatedState(mapStyle)
+    val latestLocationForFab by rememberUpdatedState(userLocation)
+    val latestPermissionForFab by rememberUpdatedState(hasLocationPermission)
 
     val mapView = remember(context) { MapView(context) }
 
@@ -228,11 +257,149 @@ fun MapPane(
         applyLocationAndBearing(map, mapState, currentStyle)
     }
 
+    LaunchedEffect(hasLocationPermission) {
+        if (!latestPermissionForFab) {
+            fabStreetLabel = "Izin lokasi".truncateStreetLabel()
+            return@LaunchedEffect
+        }
+        while (true) {
+            if (!latestPermissionForFab) {
+                fabStreetLabel = "Izin lokasi".truncateStreetLabel()
+                return@LaunchedEffect
+            }
+            val loc = latestLocationForFab
+            if (loc == null) {
+                fabStreetLabel = "Tunggu GPS…".truncateStreetLabel()
+                delay(1_000L)
+                continue
+            }
+            val text = reverseGeocodeStreetDescription(
+                context,
+                loc.latitude,
+                loc.longitude,
+            )
+            fabStreetLabel = when {
+                text.isNullOrBlank() -> "Alamat tidak diketahui"
+                else -> text
+            }.truncateStreetLabel()
+            delay(STREET_GEOCODE_INTERVAL_MS)
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
             factory = { mapView },
             modifier = Modifier.fillMaxSize(),
         )
+
+        ExtendedFloatingActionButton(
+            onClick = {
+                showStreetSheet = true
+                streetResult = null
+                streetError = null
+                when {
+                    !hasLocationPermission -> {
+                        streetLoading = false
+                        streetError =
+                            "Izin lokasi belum diberikan. Berikan izin di pengaturan aplikasi."
+                    }
+                    userLocation == null -> {
+                        streetLoading = false
+                        streetError = "Menunggu sinyal GPS… Coba lagi setelah titik lokasi muncul."
+                    }
+                    else -> {
+                        streetLoading = true
+                        val lat = userLocation.latitude
+                        val lon = userLocation.longitude
+                        scope.launch {
+                            val text = reverseGeocodeStreetDescription(context, lat, lon)
+                            streetLoading = false
+                            if (text.isNullOrBlank()) {
+                                streetError =
+                                    "Tidak menemukan nama jalan di lokasi ini. Pastikan layanan lokasi aktif dan ada koneksi jaringan."
+                            } else {
+                                streetResult = text
+                            }
+                        }
+                    }
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 8.dp, end = 64.dp)
+                .widthIn(max = 220.dp)
+                .height(40.dp),
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            icon = {
+                Icon(
+                    Icons.Default.Place,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+            },
+            text = {
+                Text(
+                    text = fabStreetLabel,
+                    maxLines = 1,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 11.sp,
+                )
+            },
+        )
+
+        if (showStreetSheet) {
+            ModalBottomSheet(
+                onDismissRequest = {
+                    showStreetSheet = false
+                    streetLoading = false
+                    streetResult = null
+                    streetError = null
+                },
+                sheetState = streetSheetState,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 32.dp),
+                ) {
+                    Text(
+                        text = "Informasi nama jalan",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    when {
+                        streetLoading -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.align(Alignment.CenterHorizontally),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = "Mencari alamat dari lokasi saat ini…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        streetError != null -> {
+                            Text(
+                                text = streetError!!,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        streetResult != null -> {
+                            Text(
+                                text = streetResult!!,
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Start,
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         // Kontrol peta di kanan bawah
         Column(
@@ -485,4 +652,12 @@ private fun locationDotBitmap(sizePx: Int): Bitmap {
     canvas.drawCircle(cx, cy, outerR, outer)
     canvas.drawCircle(cx, cy, innerR, inner)
     return bmp
+}
+
+/** Maksimal [FAB_STREET_MAX_CHARS] karakter; jika lebih, dipotong dan ditambah ellipsis. */
+private fun String.truncateStreetLabel(maxChars: Int = FAB_STREET_MAX_CHARS): String {
+    val t = trim()
+    if (t.isEmpty()) return "—".take(maxChars.coerceAtLeast(1))
+    if (t.length <= maxChars) return t
+    return t.take(maxChars - 1) + "…"
 }
