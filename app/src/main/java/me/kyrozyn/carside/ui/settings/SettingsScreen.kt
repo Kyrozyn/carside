@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 fun SettingsScreen(
     onBack: () -> Unit,
     onKelolaDownloadMaps: () -> Unit,
+    onOpenLauncherSettings: () -> Unit,
     speedWarningEnabled: Boolean,
     onSpeedWarningEnabledChange: (Boolean) -> Unit,
     onTestSpeedWarningSound: () -> Unit,
@@ -81,6 +82,35 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Launcher / layar utama",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "Carside bisa dipakai sebagai aplikasi layar utama (launcher) di mobil. " +
+                            "Setelah itu tombol Home sistem akan membuka Carside. " +
+                            "Pilih Carside di pengaturan Android sebagai aplikasi layar utama.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    OutlinedButton(
+                        onClick = onOpenLauncherSettings,
+                        modifier = Modifier.padding(top = 10.dp),
+                    ) {
+                        Text("Buka pengaturan launcher")
+                    }
+                }
+            }
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(

@@ -211,6 +211,14 @@ class MainActivity : ComponentActivity() {
                                 settingsOfflineMapAdd = false
                             },
                             onKelolaDownloadMaps = { settingsOfflineMaps = true },
+                            onOpenLauncherSettings = {
+                                val homeIntent = Intent(Settings.ACTION_HOME_SETTINGS)
+                                if (homeIntent.resolveActivity(packageManager) != null) {
+                                    startActivity(homeIntent)
+                                } else {
+                                    startActivity(Intent(Settings.ACTION_SETTINGS))
+                                }
+                            },
                             speedWarningEnabled = speedWarningEnabled,
                             onSpeedWarningEnabledChange = {
                                 container.settingsRepository.setSpeedWarningEnabled(it)
