@@ -174,6 +174,11 @@ private class MapState {
     var pendingLocation: GeoLocation? = null
     var pendingBearing: Float = 0f
     var didInitialZoom: Boolean = false
+    /**
+     * Setelah reload style Google (raster), hanya perbarui titik lokasi di peta;
+     * kamera sudah diatur dari onClick tombol lokasi.
+     */
+    var skipCameraApplyLocation: Boolean = false
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -438,14 +443,21 @@ fun MapPane(
                 tintOverride = MaterialTheme.colorScheme.primary,
                 onClick = {
                     userLocation?.let { loc ->
-                        mapState.map?.animateCamera(
-                            CameraUpdateFactory.newCameraPosition(
-                                CameraPosition.Builder()
-                                    .target(LatLng(loc.latitude, loc.longitude))
-                                    .zoom(FOLLOW_ZOOM)
-                                    .build(),
-                            ),
-                        )
+                        mapState.map?.let { map ->
+                            if (mapStyle == MapStyle.GOOGLE || mapStyle == MapStyle.GOOGLE_DARK) {
+                                mapState.styleLoaded = false
+                                mapState.skipCameraApplyLocation = true
+                                loadMapStyle(map, mapStyle, mapState, context)
+                            }
+                            map.animateCamera(
+                                CameraUpdateFactory.newCameraPosition(
+                                    CameraPosition.Builder()
+                                        .target(LatLng(loc.latitude, loc.longitude))
+                                        .zoom(FOLLOW_ZOOM)
+                                        .build(),
+                                ),
+                            )
+                        }
                     }
                 },
             )
@@ -532,6 +544,11 @@ private fun applyLocationAndBearing(
     val mapStyleObj = map.style ?: return
     (mapStyleObj.getSource(LOCATION_SOURCE_ID) as? GeoJsonSource)
         ?.setGeoJson(Feature.fromGeometry(Point.fromLngLat(loc.longitude, loc.latitude)))
+
+    if (mapState.skipCameraApplyLocation) {
+        mapState.skipCameraApplyLocation = false
+        return
+    }
 
     // Kamera: mode vector OSM ikut kompas; Google north-up
     val cameraBearing = when (mode) {
