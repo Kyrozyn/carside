@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Radio
@@ -83,7 +84,7 @@ fun DashboardScreen(
     onOpenAppDrawer: () -> Unit,
     onOpenRadio: () -> Unit,
     onOpenInternetRadio: () -> Unit,
-    onOpenOfflineMaps: () -> Unit,
+    onOpenSettings: () -> Unit,
     internetRadioState: InternetRadioState,
     onStopInternetRadio: () -> Unit,
     onSetUseGpsForwardMapBearing: (Boolean) -> Unit,
@@ -139,7 +140,6 @@ fun DashboardScreen(
                         hasLocationPermission = uiState.locationPermissionGranted,
                         userLocation = uiState.userLocation,
                         bearing = uiState.mapBearingDegrees,
-                        onOpenOfflineMaps = onOpenOfflineMaps,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -217,21 +217,40 @@ fun DashboardScreen(
             }
         }
 
-        // Tombol app drawer (pojok kiri atas)
-        IconButton(
-            onClick = onOpenAppDrawer,
+        // App drawer + pengaturan (pojok kiri atas)
+        Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(12.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                Icons.Default.Apps,
-                contentDescription = "Semua aplikasi",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(26.dp),
-            )
+            IconButton(
+                onClick = onOpenAppDrawer,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+            ) {
+                Icon(
+                    Icons.Default.Apps,
+                    contentDescription = "Semua aplikasi",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+            ) {
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = "Pengaturan",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
         }
 
         // Tombol Garage + Radio (pojok kanan atas)

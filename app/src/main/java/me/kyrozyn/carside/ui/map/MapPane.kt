@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Remove
@@ -163,7 +162,6 @@ fun MapPane(
     hasLocationPermission: Boolean,
     userLocation: GeoLocation?,
     bearing: Float = 0f,
-    onOpenOfflineMaps: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -256,11 +254,6 @@ fun MapPane(
                         MapStyle.OSM_DARK -> MapStyle.GOOGLE
                     }
                 },
-            )
-            MapControlButton(
-                icon = Icons.Default.Download,
-                contentDescription = "Peta offline",
-                onClick = onOpenOfflineMaps,
             )
             MapControlButton(
                 icon = Icons.Default.Add,

@@ -41,6 +41,7 @@ import me.kyrozyn.carside.ui.garage.GarageScreen
 import me.kyrozyn.carside.ui.offlinemaps.AddOfflineMapScreen
 import me.kyrozyn.carside.ui.offlinemaps.OfflineMapsScreen
 import me.kyrozyn.carside.ui.radio.RadioScreen
+import me.kyrozyn.carside.ui.settings.SettingsScreen
 import me.kyrozyn.carside.ui.theme.CarsideTheme
 
 class MainActivity : ComponentActivity() {
@@ -69,9 +70,10 @@ class MainActivity : ComponentActivity() {
                 var showAppDrawer by remember { mutableStateOf(false) }
                 var showRadio by remember { mutableStateOf(false) }
                 var showInternetRadio by remember { mutableStateOf(false) }
-                var showOfflineMaps by remember { mutableStateOf(false) }
-                var showOfflineMapAdd by remember { mutableStateOf(false) }
                 var showGarage by remember { mutableStateOf(false) }
+                var showSettings by remember { mutableStateOf(false) }
+                var settingsOfflineMaps by remember { mutableStateOf(false) }
+                var settingsOfflineMapAdd by remember { mutableStateOf(false) }
 
                 DisposableEffect(lifecycleOwner) {
                     val syncAccess: () -> Unit = {
@@ -183,20 +185,31 @@ class MainActivity : ComponentActivity() {
                         container = container,
                         onBack = { showGarage = false },
                     )
-                } else if (showOfflineMaps) {
-                    if (showOfflineMapAdd) {
-                        AddOfflineMapScreen(
-                            container = container,
-                            onBack = { showOfflineMapAdd = false },
-                        )
+                } else if (showSettings) {
+                    if (settingsOfflineMaps) {
+                        if (settingsOfflineMapAdd) {
+                            AddOfflineMapScreen(
+                                container = container,
+                                onBack = { settingsOfflineMapAdd = false },
+                            )
+                        } else {
+                            OfflineMapsScreen(
+                                container = container,
+                                onBack = {
+                                    settingsOfflineMaps = false
+                                    settingsOfflineMapAdd = false
+                                },
+                                onNavigateToAdd = { settingsOfflineMapAdd = true },
+                            )
+                        }
                     } else {
-                        OfflineMapsScreen(
-                            container = container,
+                        SettingsScreen(
                             onBack = {
-                                showOfflineMaps = false
-                                showOfflineMapAdd = false
+                                showSettings = false
+                                settingsOfflineMaps = false
+                                settingsOfflineMapAdd = false
                             },
-                            onNavigateToAdd = { showOfflineMapAdd = true },
+                            onKelolaDownloadMaps = { settingsOfflineMaps = true },
                         )
                     }
                 } else {
@@ -220,7 +233,7 @@ class MainActivity : ComponentActivity() {
                         onOpenAppDrawer = { showAppDrawer = true },
                         onOpenRadio = { showRadio = true },
                         onOpenInternetRadio = { showInternetRadio = true },
-                        onOpenOfflineMaps = { showOfflineMaps = true },
+                        onOpenSettings = { showSettings = true },
                         onOpenGarage = { showGarage = true },
                         onStopTrip = vm::stopActiveTrip,
                         internetRadioState = internetRadioState,
