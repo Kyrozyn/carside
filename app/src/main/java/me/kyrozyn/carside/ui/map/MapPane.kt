@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -55,7 +56,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import me.kyrozyn.carside.data.location.reverseGeocodeStreetDescription
+import me.kyrozyn.carside.data.location.FAB_STREET_MAX_CHARS
+import me.kyrozyn.carside.data.location.reverseGeocodeResult
 import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_DARK_STYLE_URL
 import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_LIBERTY_STYLE_URL
 import me.kyrozyn.carside.domain.model.GeoLocation
@@ -79,7 +81,6 @@ import org.maplibre.android.style.sources.TileSet
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.Point
 
-private const val FAB_STREET_MAX_CHARS = 30
 /** Jeda antar pembaruan nama jalan di FAB (gerak GPS tidak memicu geocode berulang). */
 private const val STREET_GEOCODE_INTERVAL_MS = 60_000L
 
@@ -278,15 +279,15 @@ fun MapPane(
                 delay(1_000L)
                 continue
             }
-            val text = reverseGeocodeStreetDescription(
+            val r = reverseGeocodeResult(
                 context,
                 loc.latitude,
                 loc.longitude,
             )
             fabStreetLabel = when {
-                text.isNullOrBlank() -> "Alamat tidak diketahui"
-                else -> text
-            }.truncateStreetLabel()
+                r == null -> "Alamat tidak diketahui".truncateStreetLabel()
+                else -> r.fabParts.fabLabel()
+            }
             delay(STREET_GEOCODE_INTERVAL_MS)
         }
     }
@@ -317,13 +318,13 @@ fun MapPane(
                         val lat = userLocation.latitude
                         val lon = userLocation.longitude
                         scope.launch {
-                            val text = reverseGeocodeStreetDescription(context, lat, lon)
+                            val r = reverseGeocodeResult(context, lat, lon)
                             streetLoading = false
-                            if (text.isNullOrBlank()) {
+                            if (r == null) {
                                 streetError =
                                     "Tidak menemukan nama jalan di lokasi ini. Pastikan layanan lokasi aktif dan ada koneksi jaringan."
                             } else {
-                                streetResult = text
+                                streetResult = r.fullAddressLine
                             }
                         }
                     }
@@ -332,8 +333,8 @@ fun MapPane(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 8.dp, end = 64.dp)
-                .widthIn(max = 220.dp)
-                .height(40.dp),
+                .widthIn(max = 320.dp)
+                .heightIn(min = 40.dp),
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             icon = {
@@ -346,7 +347,7 @@ fun MapPane(
             text = {
                 Text(
                     text = fabStreetLabel,
-                    maxLines = 1,
+                    maxLines = 2,
                     style = MaterialTheme.typography.labelMedium,
                     fontSize = 11.sp,
                 )
