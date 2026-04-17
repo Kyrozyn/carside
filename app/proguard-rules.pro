@@ -12,10 +12,5 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Preserve line numbers so Play Console / deobfuscation can recover readable stacks.
+-keepattributes SourceFile,LineNumberTable
