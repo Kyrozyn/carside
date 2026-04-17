@@ -43,6 +43,8 @@ import me.kyrozyn.carside.ui.dashboard.WeatherUi
 private val CompassColor = Color(0xFFFFB300)
 private val SpeedColor = Color(0xFF26A69A)
 
+private const val SPEED_KMH_HIGHLIGHT = 90f
+
 /** Satu bar penuh: jam lokal | shortcut aplikasi | cuaca (di bawah peta + pemutar media). */
 @Composable
 fun UnifiedDashboardStatusBar(
@@ -121,11 +123,19 @@ fun UnifiedDashboardStatusBar(
 @Composable
 private fun GpsSpeedSection(speedMps: Float?) {
     val kmh = speedMps?.let { it * 3.6f }
+    val overLimit = kmh != null && kmh > SPEED_KMH_HIGHLIGHT
+    val iconTint = if (overLimit) MaterialTheme.colorScheme.error else SpeedColor
+    val valueColor = if (overLimit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    val labelColor = if (overLimit) {
+        MaterialTheme.colorScheme.error.copy(alpha = 0.75f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             Icons.Outlined.Speed,
             contentDescription = null,
-            tint = SpeedColor,
+            tint = iconTint,
             modifier = Modifier.size(24.dp),
         )
         Spacer(Modifier.width(6.dp))
@@ -133,13 +143,13 @@ private fun GpsSpeedSection(speedMps: Float?) {
             Text(
                 text = if (kmh != null) "${kmh.toInt()} km/h" else "—",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = valueColor,
                 maxLines = 1,
             )
             Text(
                 text = "Kecepatan GPS",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                color = labelColor,
             )
         }
     }

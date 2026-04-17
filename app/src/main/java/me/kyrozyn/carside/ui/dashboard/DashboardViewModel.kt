@@ -201,7 +201,36 @@ class DashboardViewModel(
                 }
             }
         }
+
+        viewModelScope.launch {
+            combine(
+                effectiveLocation,
+                container.settingsRepository.speedWarningEnabled,
+            ) { loc: GeoLocation?, enabled: Boolean -> loc to enabled }
+                .collect { (loc, enabled) ->
+                    if (!enabled) {
+                        if (loc?.speedMps != null) {
+                            speedWarningWasAbove =
+                                loc.speedMps!! * MPS_TO_KMH > SPEED_WARNING_THRESHOLD_KMH
+                        }
+                        return@collect
+                    }
+                    if (loc == null || loc.speedMps == null) return@collect
+                    val speedKmh = loc.speedMps!! * MPS_TO_KMH
+                    val now = System.currentTimeMillis()
+                    val above = speedKmh > SPEED_WARNING_THRESHOLD_KMH
+                    val crossedUp = above && !speedWarningWasAbove
+                    speedWarningWasAbove = above
+                    if (!crossedUp) return@collect
+                    if (now - lastSpeedWarningAtMs < SPEED_WARNING_COOLDOWN_MS) return@collect
+                    lastSpeedWarningAtMs = now
+                    container.softSpeedTonePlayer.play()
+                }
+        }
     }
+
+    private var speedWarningWasAbove = false
+    private var lastSpeedWarningAtMs = 0L
 
     private fun formatTime(): String = LocalTime.now().format(timeFormatter)
 
@@ -274,6 +303,10 @@ class DashboardViewModel(
     companion object {
         private const val WEATHER_REFRESH_DISTANCE_METERS = 1_000.0
         private const val WEATHER_REFRESH_INTERVAL_MS = 10 * 60 * 1_000L
+
+        private const val MPS_TO_KMH = 3.6f
+        private const val SPEED_WARNING_THRESHOLD_KMH = 90f
+        private const val SPEED_WARNING_COOLDOWN_MS = 10 * 60 * 1_000L
 
         /** Saat di bawah ini, arah GPS cenderung noise saat kendaraan diam/pelan. */
         private const val GPS_BEARING_MIN_SPEED_MPS = 2.0f

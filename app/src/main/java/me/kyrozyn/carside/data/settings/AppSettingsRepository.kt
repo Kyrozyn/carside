@@ -18,6 +18,11 @@ class AppSettingsRepository(context: Context) {
     )
 
     val useGpsForwardMapBearing: StateFlow<Boolean> = _useGpsForwardMapBearing.asStateFlow()
+
+    private val _speedWarningEnabled = MutableStateFlow(
+        prefs.getBoolean(KEY_SPEED_WARNING_ENABLED, true),
+    )
+    val speedWarningEnabled: StateFlow<Boolean> = _speedWarningEnabled.asStateFlow()
     private val _shortcutPackages = MutableStateFlow(readShortcutPackages())
     val shortcutPackages: StateFlow<List<String?>> = _shortcutPackages.asStateFlow()
 
@@ -31,6 +36,12 @@ class AppSettingsRepository(context: Context) {
         if (_useGpsForwardMapBearing.value == enabled) return
         _useGpsForwardMapBearing.value = enabled
         prefs.edit().putBoolean(KEY_USE_GPS_FORWARD_MAP_BEARING, enabled).apply()
+    }
+
+    fun setSpeedWarningEnabled(enabled: Boolean) {
+        if (_speedWarningEnabled.value == enabled) return
+        _speedWarningEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_SPEED_WARNING_ENABLED, enabled).apply()
     }
 
     fun setShortcutPackage(slot: Int, packageName: String?) {
@@ -171,6 +182,7 @@ class AppSettingsRepository(context: Context) {
     private companion object {
         private const val PREFS_NAME = "carside_settings"
         private const val KEY_USE_GPS_FORWARD_MAP_BEARING = "use_gps_forward_map_bearing"
+        private const val KEY_SPEED_WARNING_ENABLED = "speed_warning_enabled"
         private const val KEY_SHORTCUT_PREFIX = "shortcut_package"
         private const val SHORTCUT_SLOT_COUNT = 4
         private const val KEY_RADIO_PRESET_PREFIX = "radio_preset"

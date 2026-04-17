@@ -16,6 +16,7 @@ import me.kyrozyn.carside.data.radio.HardwareRadioController
 import me.kyrozyn.carside.data.radio.NoOpRadioController
 import me.kyrozyn.carside.data.db.CarsideDatabase
 import me.kyrozyn.carside.data.fuel.RoomFuelRepository
+import me.kyrozyn.carside.data.alert.SoftSpeedTonePlayer
 import me.kyrozyn.carside.data.settings.AppSettingsRepository
 import me.kyrozyn.carside.data.trip.RoomTripRepository
 import me.kyrozyn.carside.data.trip.TripTracker
@@ -41,6 +42,7 @@ class AppContainer(context: Context) {
     val compassProvider: CompassProvider = GpsCompassProvider(locationProvider)
     val mapSession: MapSession = NoOpMapSession()
     val settingsRepository = AppSettingsRepository(appContext)
+    val softSpeedTonePlayer = SoftSpeedTonePlayer(appContext)
     val offlineMapsRepository = OfflineMapsRepository(appContext)
     val radioController: RadioController = runCatching {
         HardwareRadioController(appContext, settingsRepository)

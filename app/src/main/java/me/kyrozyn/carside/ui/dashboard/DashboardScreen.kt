@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -561,6 +562,9 @@ private fun WeatherDetailsFullScreen(
                         leftValue = loc.bearingDegrees?.let { "${it.toInt()}°" } ?: "N/A",
                         rightTitle = "🚗 Kecepatan",
                         rightValue = loc.speedMps?.let { "${"%.1f".format(it)} m/s" } ?: "N/A",
+                        rightValueColor = loc.speedMps?.let { mps ->
+                            if (mps * 3.6f > 90f) MaterialTheme.colorScheme.error else null
+                        },
                     )
                 } else {
                     InfoCard(
@@ -710,19 +714,25 @@ private fun InfoRow(
     leftValue: String,
     rightTitle: String,
     rightValue: String,
+    rightValueColor: Color? = null,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(modifier = Modifier.weight(1f)) {
             InfoCard(title = leftTitle, value = leftValue)
         }
         Box(modifier = Modifier.weight(1f)) {
-            InfoCard(title = rightTitle, value = rightValue)
+            InfoCard(title = rightTitle, value = rightValue, valueColor = rightValueColor)
         }
     }
 }
 
 @Composable
-private fun InfoCard(title: String, value: String) {
+private fun InfoCard(
+    title: String,
+    value: String,
+    valueColor: Color? = null,
+) {
+    val resolvedValueColor = valueColor ?: MaterialTheme.colorScheme.onSurface
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
@@ -741,7 +751,7 @@ private fun InfoCard(title: String, value: String) {
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = resolvedValueColor,
             )
         }
     }

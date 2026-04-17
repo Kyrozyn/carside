@@ -62,6 +62,9 @@ class FusedLocationDataSource(context: Context) : LocationProvider {
             client.removeLocationUpdates(callback)
         }
     }.distinctUntilChanged { old, new ->
-        old?.latitude == new?.latitude && old?.longitude == new?.longitude
+        old?.latitude == new?.latitude &&
+            old?.longitude == new?.longitude &&
+            old?.speedMps == new?.speedMps &&
+            old?.bearingDegrees == new?.bearingDegrees
     }
 }

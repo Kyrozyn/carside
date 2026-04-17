@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
                 val uiState by vm.uiState.collectAsStateWithLifecycle()
                 val internetRadioState by container.internetRadioController.state.collectAsStateWithLifecycle()
                 val offlineDownloadActive by container.offlineMapsRepository.activeDownload.collectAsStateWithLifecycle()
+                val speedWarningEnabled by container.settingsRepository.speedWarningEnabled.collectAsStateWithLifecycle()
                 val context = LocalContext.current
                 val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -210,6 +211,11 @@ class MainActivity : ComponentActivity() {
                                 settingsOfflineMapAdd = false
                             },
                             onKelolaDownloadMaps = { settingsOfflineMaps = true },
+                            speedWarningEnabled = speedWarningEnabled,
+                            onSpeedWarningEnabledChange = {
+                                container.settingsRepository.setSpeedWarningEnabled(it)
+                            },
+                            onTestSpeedWarningSound = { container.softSpeedTonePlayer.play() },
                         )
                     }
                 } else {
