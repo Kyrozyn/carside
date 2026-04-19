@@ -8,6 +8,7 @@ import me.kyrozyn.carside.domain.model.InternetStation
 import me.kyrozyn.carside.domain.model.RadioBand
 import me.kyrozyn.carside.domain.model.RadioPreset
 import me.kyrozyn.carside.domain.model.RadioState
+import me.kyrozyn.carside.ui.theme.AppThemePalette
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -32,6 +33,13 @@ class AppSettingsRepository(context: Context) {
     private val _internetRadioFavorites = MutableStateFlow(readInternetRadioFavorites())
     val internetRadioFavorites: StateFlow<List<InternetStation>> = _internetRadioFavorites.asStateFlow()
 
+    private val _selectedPalette = MutableStateFlow(
+        prefs.getString(KEY_SELECTED_PALETTE, null)
+            ?.let { runCatching { AppThemePalette.valueOf(it) }.getOrNull() }
+            ?: AppThemePalette.DARK_BLUE,
+    )
+    val selectedPalette: StateFlow<AppThemePalette> = _selectedPalette.asStateFlow()
+
     fun setUseGpsForwardMapBearing(enabled: Boolean) {
         if (_useGpsForwardMapBearing.value == enabled) return
         _useGpsForwardMapBearing.value = enabled
@@ -42,6 +50,12 @@ class AppSettingsRepository(context: Context) {
         if (_speedWarningEnabled.value == enabled) return
         _speedWarningEnabled.value = enabled
         prefs.edit().putBoolean(KEY_SPEED_WARNING_ENABLED, enabled).apply()
+    }
+
+    fun setSelectedPalette(palette: AppThemePalette) {
+        if (_selectedPalette.value == palette) return
+        _selectedPalette.value = palette
+        prefs.edit().putString(KEY_SELECTED_PALETTE, palette.name).apply()
     }
 
     fun setShortcutPackage(slot: Int, packageName: String?) {
@@ -187,5 +201,6 @@ class AppSettingsRepository(context: Context) {
         private const val SHORTCUT_SLOT_COUNT = 4
         private const val KEY_RADIO_PRESET_PREFIX = "radio_preset"
         private const val KEY_INTERNET_RADIO_FAVORITES = "internet_radio_favorites"
+        private const val KEY_SELECTED_PALETTE = "selected_palette"
     }
 }

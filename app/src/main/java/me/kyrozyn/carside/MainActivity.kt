@@ -57,7 +57,8 @@ class MainActivity : ComponentActivity() {
         hideSystemBars()
         val container = (application as CarsideApplication).container
         setContent {
-            CarsideTheme {
+            val selectedPalette by container.settingsRepository.selectedPalette.collectAsStateWithLifecycle()
+            CarsideTheme(palette = selectedPalette) {
                 val vm: DashboardViewModel = viewModel(factory = DashboardViewModel.factory(container))
                 val uiState by vm.uiState.collectAsStateWithLifecycle()
                 val internetRadioState by container.internetRadioController.state.collectAsStateWithLifecycle()
@@ -225,6 +226,8 @@ class MainActivity : ComponentActivity() {
                                 container.settingsRepository.setSpeedWarningEnabled(it)
                             },
                             onTestSpeedWarningSound = { container.softSpeedTonePlayer.play() },
+                            selectedPalette = selectedPalette,
+                            onPaletteSelected = { container.settingsRepository.setSelectedPalette(it) },
                         )
                     }
                 } else {
