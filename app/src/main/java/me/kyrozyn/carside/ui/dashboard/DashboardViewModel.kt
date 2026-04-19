@@ -23,6 +23,7 @@ import kotlinx.coroutines.delay
 import me.kyrozyn.carside.di.AppContainer
 import me.kyrozyn.carside.domain.model.CompassHeading
 import me.kyrozyn.carside.domain.model.GeoLocation
+import me.kyrozyn.carside.domain.model.NavigationState
 import me.kyrozyn.carside.domain.model.TripTrackerPhase
 import me.kyrozyn.carside.domain.model.TripTrackerState
 import me.kyrozyn.carside.domain.model.WeatherSummary
@@ -56,6 +57,8 @@ data class DashboardUiState(
     val userLocation: GeoLocation?,
     /** Status trip otomatis (GPS). */
     val activeTrip: TripTrackerState,
+    /** Snapshot navigasi dari notifikasi Google Maps / Waze. */
+    val navigation: NavigationState,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -95,8 +98,9 @@ class DashboardViewModel(
             container.mediaController.playbackState,
             _weather,
             _clock,
-        ) { media, weather, clock ->
-            Triple(media, weather, clock)
+            container.navigationRepository.state,
+        ) { media, weather, clock, nav ->
+            Quadruple(media, weather, clock, nav)
         },
         combine(
             shortcutPackages,
@@ -131,6 +135,7 @@ class DashboardViewModel(
             locationPermissionGranted = compassBrowsePermMode.third,
             userLocation = userLoc,
             activeTrip = activeTrip,
+            navigation = mediaClock.fourth,
         )
     }.stateIn(
         viewModelScope,
@@ -154,6 +159,7 @@ class DashboardViewModel(
                 currentDurationSeconds = 0L,
                 maxSpeedMps = null,
             ),
+            navigation = NavigationState.Idle,
         ),
     )
 

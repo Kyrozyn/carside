@@ -61,12 +61,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.kyrozyn.carside.domain.model.ActiveOfflineDownload
 import me.kyrozyn.carside.domain.model.InternetRadioState
-import me.kyrozyn.carside.domain.model.TripTrackerPhase
 import me.kyrozyn.carside.ui.apps.InstalledAppsLoader
 import me.kyrozyn.carside.ui.apps.LaunchableApp
 import me.kyrozyn.carside.ui.internetradio.InternetRadioMiniPanel
 import me.kyrozyn.carside.ui.map.MapPane
 import me.kyrozyn.carside.ui.media.MediaPlayerPanel
+import me.kyrozyn.carside.ui.navigation.NavigationPanel
 import me.kyrozyn.carside.ui.status.UnifiedDashboardStatusBar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,7 +98,6 @@ fun DashboardScreen(
     /** Unduhan peta offline aktif (background); banner tipis di atas peta. */
     offlineDownloadActive: ActiveOfflineDownload? = null,
     onOpenGarage: () -> Unit = {},
-    onStopTrip: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -137,12 +136,33 @@ fun DashboardScreen(
                         .fillMaxHeight()
                         .background(MaterialTheme.colorScheme.surface),
                 ) {
-                    MapPane(
-                        hasLocationPermission = uiState.locationPermissionGranted,
-                        userLocation = uiState.userLocation,
-                        bearing = uiState.mapBearingDegrees,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    var showMapOverride by remember { mutableStateOf(false) }
+                    LaunchedEffect(uiState.navigation.active) {
+                        if (!uiState.navigation.active) showMapOverride = false
+                    }
+
+                    val showNavPanel = uiState.navigation.active && !showMapOverride
+                    if (showNavPanel) {
+                        NavigationPanel(
+                            state = uiState.navigation,
+                            onOpenSourceApp = {
+                                val pkg = uiState.navigation.sourceApp.packageName
+                                if (pkg.isNotBlank()) onLaunchShortcutApp(pkg)
+                            },
+                            onSwitchToMap = { showMapOverride = true },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        MapPane(
+                            hasLocationPermission = uiState.locationPermissionGranted,
+                            userLocation = uiState.userLocation,
+                            bearing = uiState.mapBearingDegrees,
+                            onNavigationClick = if (uiState.navigation.active) {
+                                { showMapOverride = false }
+                            } else null,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
 
                 Box(
@@ -301,66 +321,6 @@ fun DashboardScreen(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(26.dp),
                     )
-                }
-            }
-            val trip = uiState.activeTrip
-            val showTripChip = trip.phase == TripTrackerPhase.Active ||
-                trip.phase == TripTrackerPhase.Cooldown
-            if (showTripChip) {
-                val km = trip.currentDistanceMeters / 1000.0
-                val sec = trip.currentDurationSeconds
-                val h = sec / 3600
-                val m = (sec % 3600) / 60
-                val s = sec % 60
-                val timeStr = if (h > 0) {
-                    "%d:%02d:%02d".format(h, m, s)
-                } else {
-                    "%d:%02d".format(m, s)
-                }
-                Surface(
-                    shape = RoundedCornerShape(22.dp),
-                    tonalElevation = 4.dp,
-                    shadowElevation = 3.dp,
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text(
-                            text = "🚗",
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Column(modifier = Modifier.weight(1f, fill = false)) {
-                            Text(
-                                text = "Perjalanan GPS sedang direkam",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            )
-                            Text(
-                                text = "Jarak perkiraan (bukan odometer): ${"%.2f".format(km)} km",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.95f),
-                            )
-                            Text(
-                                text = "Lama berkendara sejak deteksi mulai: $timeStr",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.88f),
-                            )
-                        }
-                        TextButton(
-                            onClick = onStopTrip,
-                            modifier = Modifier.height(40.dp),
-                        ) {
-                            Text(
-                                "⏹ Selesai & simpan",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                    }
                 }
             }
         }

@@ -8,4 +8,7 @@ object MediaSessionBridge {
 
     /** Hint notifikasi (judul/sampul) berubah — refresh UI media. */
     var onMediaHintUpdated: (() -> Unit)? = null
+
+    /** Hint notifikasi navigasi (Google Maps / Waze) berubah — refresh panel navigasi. */
+    var onNavigationHintUpdated: (() -> Unit)? = null
 }

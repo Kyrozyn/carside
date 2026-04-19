@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Centered in 108dp canvas; car bitmap already has transparent margin for adaptive masks. -->
+<!-- 108dp adaptive layer; car bitmap lives in drawable-xxxhdpi so intrinsic size is ~108dp (432px @ 640dpi). -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:gravity="center">
-        <bitmap
-            android:gravity="center"
-            android:src="@drawable/ic_launcher_car" />
-    </item>
+    <item
+        android:width="108dp"
+        android:height="108dp"
+        android:drawable="@drawable/ic_launcher_car"
+        android:gravity="center" />
 </layer-list>

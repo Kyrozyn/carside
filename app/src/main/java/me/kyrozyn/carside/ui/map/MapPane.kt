@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.CircularProgressIndicator
@@ -188,6 +189,7 @@ fun MapPane(
     hasLocationPermission: Boolean,
     userLocation: GeoLocation?,
     bearing: Float = 0f,
+    onNavigationClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -415,6 +417,14 @@ fun MapPane(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.End,
         ) {
+            if (onNavigationClick != null) {
+                MapControlButton(
+                    icon = Icons.Default.Navigation,
+                    contentDescription = "Kembali ke navigasi",
+                    tintOverride = MaterialTheme.colorScheme.primary,
+                    onClick = onNavigationClick,
+                )
+            }
             MapLayerSwitchButton(
                 currentStyle = mapStyle,
                 onClick = {

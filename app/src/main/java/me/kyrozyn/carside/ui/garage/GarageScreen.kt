@@ -67,6 +67,8 @@ import me.kyrozyn.carside.di.AppContainer
 import me.kyrozyn.carside.domain.model.FuelEconomySummary
 import me.kyrozyn.carside.domain.model.FuelEntry
 import me.kyrozyn.carside.domain.model.Trip
+import me.kyrozyn.carside.domain.model.TripTrackerPhase
+import me.kyrozyn.carside.domain.model.TripTrackerState
 
 private val dateFmt: DateTimeFormatter =
     DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm").withZone(ZoneId.systemDefault())
@@ -122,6 +124,14 @@ fun GarageScreen(
     val trips by vm.trips.collectAsStateWithLifecycle()
     val fuelEntries by vm.fuelEntries.collectAsStateWithLifecycle()
     val economy by vm.economy.collectAsStateWithLifecycle()
+    val activeTrip by vm.activeTripState.collectAsStateWithLifecycle(
+        initialValue = TripTrackerState(
+            phase = TripTrackerPhase.Idle,
+            currentDistanceMeters = 0.0,
+            currentDurationSeconds = 0L,
+            maxSpeedMps = null,
+        ),
+    )
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -157,6 +167,13 @@ fun GarageScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
+            ActiveTripBanner(
+                trip = activeTrip,
+                onStopTrip = { vm.stopActiveTrip() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
             OutlinedButton(
                 onClick = { showDataTypesInfo = true },
                 modifier = Modifier
@@ -232,6 +249,74 @@ fun GarageScreen(
                         showFuelDialog = true
                     },
                     onDelete = { vm.deleteFuelEntry(it) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveTripBanner(
+    trip: TripTrackerState,
+    onStopTrip: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val showBanner = trip.phase == TripTrackerPhase.Active ||
+        trip.phase == TripTrackerPhase.Cooldown
+    if (!showBanner) return
+
+    val km = trip.currentDistanceMeters / 1000.0
+    val sec = trip.currentDurationSeconds
+    val h = sec / 3600
+    val m = (sec % 3600) / 60
+    val s = sec % 60
+    val timeStr = if (h > 0) {
+        "%d:%02d:%02d".format(h, m, s)
+    } else {
+        "%d:%02d".format(m, s)
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(22.dp),
+        tonalElevation = 4.dp,
+        shadowElevation = 3.dp,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = "🚗",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = "Perjalanan GPS sedang direkam",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Text(
+                    text = "Jarak perkiraan (bukan odometer): ${"%.2f".format(km)} km",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.95f),
+                )
+                Text(
+                    text = "Lama berkendara sejak deteksi mulai: $timeStr",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.88f),
+                )
+            }
+            TextButton(
+                onClick = onStopTrip,
+                modifier = Modifier.height(40.dp),
+            ) {
+                Text(
+                    "⏹ Selesai & simpan",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
         }

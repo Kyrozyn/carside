@@ -91,6 +91,7 @@ class MainActivity : ComponentActivity() {
                         if (event == Lifecycle.Event.ON_RESUME) {
                             syncAccess()
                             container.mediaController.refreshActiveSessions()
+                            container.navigationRepository.refresh()
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
@@ -249,7 +250,6 @@ class MainActivity : ComponentActivity() {
                         onOpenInternetRadio = { showInternetRadio = true },
                         onOpenSettings = { showSettings = true },
                         onOpenGarage = { showGarage = true },
-                        onStopTrip = vm::stopActiveTrip,
                         internetRadioState = internetRadioState,
                         onStopInternetRadio = { container.internetRadioController.stop() },
                         onSetUseGpsForwardMapBearing = vm::setUseGpsForwardMapBearing,
