@@ -2,10 +2,12 @@ package me.kyrozyn.carside.data.trip
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import me.kyrozyn.carside.core.geo.haversineMeters
 import me.kyrozyn.carside.data.db.dao.TripDao
@@ -35,6 +37,7 @@ class TripTracker(
     val activeTripState: StateFlow<TripTrackerState> = _activeTripState.asStateFlow()
 
     private var collectionJob: Job? = null
+    private var watchdogJob: Job? = null
     private var trackingEnabled: Boolean = false
 
     private var phase: TripTrackerPhase = TripTrackerPhase.Idle
@@ -47,6 +50,7 @@ class TripTracker(
     private var lastLon: Double? = null
     private var distanceMeters: Double = 0.0
     private var maxSpeedMps: Float = 0f
+    private var lastKnownLocation: GeoLocation? = null
     private val routePoints: MutableList<RoutePoint> = mutableListOf()
 
     private data class RoutePoint(
@@ -60,9 +64,12 @@ class TripTracker(
         trackingEnabled = enabled
         if (enabled) {
             startCollecting()
+            startCooldownWatchdog()
         } else {
             collectionJob?.cancel()
             collectionJob = null
+            watchdogJob?.cancel()
+            watchdogJob = null
             scope.launch {
                 when (phase) {
                     TripTrackerPhase.Active, TripTrackerPhase.Cooldown -> stopActiveTrip()
@@ -83,6 +90,26 @@ class TripTracker(
         }
     }
 
+    private fun startCooldownWatchdog() {
+        if (watchdogJob?.isActive == true) return
+        watchdogJob = scope.launch {
+            while (isActive && trackingEnabled) {
+                delay(COOLDOWN_WATCHDOG_INTERVAL_MS)
+                if (phase != TripTrackerPhase.Cooldown) continue
+                val now = System.currentTimeMillis()
+                if (now - cooldownStartMs < STOP_HOLD_MS) continue
+                val fallbackLoc = lastKnownLocation ?: GeoLocation(
+                    latitude = lastLat ?: tripStartLat,
+                    longitude = lastLon ?: tripStartLon,
+                )
+                endTrip(now, fallbackLoc)
+                phase = TripTrackerPhase.Idle
+                clearTripBuffers()
+                emitState()
+            }
+        }
+    }
+
     private suspend fun resetIdle() {
         phase = TripTrackerPhase.Idle
         armingStartMs = 0L
@@ -100,6 +127,7 @@ class TripTracker(
         if (!trackingEnabled) return
         val acc = loc.accuracyMeters
         if (acc != null && acc > MAX_ACCURACY_METERS) return
+        lastKnownLocation = loc
 
         val now = System.currentTimeMillis()
         val speed = loc.speedMps ?: 0f
@@ -227,6 +255,7 @@ class TripTracker(
         distanceMeters = 0.0
         maxSpeedMps = 0f
         routePoints.clear()
+        lastKnownLocation = null
     }
 
     private fun emitState() {
@@ -260,6 +289,7 @@ class TripTracker(
         const val START_HOLD_MS: Long = 10_000L
         /** Berhenti / pelan lama (mis. macet) sebelum trip dianggap selesai. */
         const val STOP_HOLD_MS: Long = 900_000L
+        const val COOLDOWN_WATCHDOG_INTERVAL_MS: Long = 5_000L
         const val MIN_POINT_DISTANCE_METERS: Double = 5.0
         const val MAX_ACCURACY_METERS: Float = 50f
     }
