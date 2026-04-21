@@ -3,6 +3,7 @@ package me.kyrozyn.carside
 import android.Manifest
 import android.content.pm.PackageManager
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -219,6 +220,15 @@ class MainActivity : ComponentActivity() {
                                     startActivity(homeIntent)
                                 } else {
                                     startActivity(Intent(Settings.ACTION_SETTINGS))
+                                }
+                            },
+                            onOpenPrivacyPolicy = {
+                                val browserIntent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://carside.kyrozyn.web.id/carside-privacy-policy.html"),
+                                )
+                                if (browserIntent.resolveActivity(packageManager) != null) {
+                                    startActivity(browserIntent)
                                 }
                             },
                             speedWarningEnabled = speedWarningEnabled,

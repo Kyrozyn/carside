@@ -3,6 +3,7 @@ package me.kyrozyn.carside.ui.media
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,6 +74,14 @@ fun MediaPlayerPanel(
     modifier: Modifier = Modifier,
 ) {
     val displayPosMs = rememberDisplayedPositionMs(state)
+    val isDarkTheme = isSystemInDarkTheme()
+    val primaryTextColor = if (isDarkTheme) Color.White else MaterialTheme.colorScheme.onSurface
+    val secondaryTextColor = if (isDarkTheme) {
+        Color.White.copy(alpha = 0.82f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val iconColor = if (isDarkTheme) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurface
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -87,9 +96,12 @@ fun MediaPlayerPanel(
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.1f),
-                            0.35f to Color.Black.copy(alpha = 0.25f),
-                            1f to Color.Black.copy(alpha = 0.82f),
+                            0f to if (isDarkTheme) Color.Black.copy(alpha = 0.1f)
+                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.08f),
+                            0.35f to if (isDarkTheme) Color.Black.copy(alpha = 0.25f)
+                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
+                            1f to if (isDarkTheme) Color.Black.copy(alpha = 0.82f)
+                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                         ),
                     ),
             )
@@ -147,7 +159,7 @@ fun MediaPlayerPanel(
                         Icon(
                             Icons.Default.Settings,
                             contentDescription = "Pengaturan",
-                            tint = Color.White.copy(alpha = 0.85f),
+                            tint = iconColor,
                             modifier = Modifier.size(22.dp),
                         )
                     }
@@ -169,7 +181,7 @@ fun MediaPlayerPanel(
                             Text(
                                 text = state.sourceLabel,
                                 style = MaterialTheme.typography.labelLarge,
-                                color = Color.White.copy(alpha = 0.85f),
+                                color = secondaryTextColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -179,7 +191,7 @@ fun MediaPlayerPanel(
                             text = state.track.title,
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = primaryTextColor,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.fillMaxWidth(),
@@ -189,7 +201,7 @@ fun MediaPlayerPanel(
                             Text(
                                 text = state.track.artist,
                                 style = MaterialTheme.typography.titleMedium,
-                                color = Color.White.copy(alpha = 0.82f),
+                                color = secondaryTextColor,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.fillMaxWidth(),
@@ -224,7 +236,7 @@ fun MediaPlayerPanel(
                                     colors = SliderDefaults.colors(
                                         thumbColor = Color(0xFF42A5F5),
                                         activeTrackColor = Color(0xFF42A5F5),
-                                        inactiveTrackColor = Color.White.copy(alpha = 0.28f),
+                                        inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
                                     ),
                                 )
                             } else {
@@ -235,7 +247,7 @@ fun MediaPlayerPanel(
                                         .height(4.dp)
                                         .clip(RoundedCornerShape(2.dp)),
                                     color = Color(0xFF42A5F5),
-                                    trackColor = Color.White.copy(alpha = 0.28f),
+                                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
                                 )
                             }
                             Row(
@@ -247,12 +259,12 @@ fun MediaPlayerPanel(
                                 Text(
                                     text = formatTrackTime(displayPosMs),
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = Color.White.copy(alpha = 0.75f),
+                                    color = secondaryTextColor,
                                 )
                                 Text(
                                     text = formatTrackTime(state.durationMs),
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = Color.White.copy(alpha = 0.75f),
+                                    color = secondaryTextColor,
                                 )
                             }
                         } else if (state.isPlaying) {
@@ -262,7 +274,7 @@ fun MediaPlayerPanel(
                                     .height(3.dp)
                                     .clip(RoundedCornerShape(2.dp)),
                                 color = Color(0xFF42A5F5),
-                                trackColor = Color.White.copy(alpha = 0.28f),
+                                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
                             )
                         }
                     } else {
@@ -270,13 +282,13 @@ fun MediaPlayerPanel(
                             text = state.track.title,
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = primaryTextColor,
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = state.track.artist,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.75f),
+                            color = secondaryTextColor,
                         )
                     }
 
@@ -297,7 +309,7 @@ fun MediaPlayerPanel(
                                 Icons.Default.SkipPrevious,
                                 contentDescription = "Sebelumnya",
                                 modifier = Modifier.size(30.dp),
-                                tint = Color.White.copy(alpha = if (state.canSkipPrevious) 0.95f else 0.35f),
+                                tint = iconColor.copy(alpha = if (state.canSkipPrevious) 0.95f else 0.35f),
                             )
                         }
 
@@ -306,8 +318,8 @@ fun MediaPlayerPanel(
                                 .size(64.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (canToggle) Color.White.copy(alpha = 0.95f)
-                                    else Color.White.copy(alpha = 0.22f),
+                                    if (canToggle) MaterialTheme.colorScheme.primary.copy(alpha = 0.95f)
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f),
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -320,7 +332,8 @@ fun MediaPlayerPanel(
                                     imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = if (state.isPlaying) "Jeda" else "Putar",
                                     modifier = Modifier.size(34.dp),
-                                    tint = if (canToggle) Color(0xFF0D1B2A) else Color.White.copy(alpha = 0.4f),
+                                    tint = if (canToggle) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                                 )
                             }
                         }
@@ -334,7 +347,7 @@ fun MediaPlayerPanel(
                                 Icons.Default.SkipNext,
                                 contentDescription = "Berikutnya",
                                 modifier = Modifier.size(30.dp),
-                                tint = Color.White.copy(alpha = if (state.canSkipNext) 0.95f else 0.35f),
+                                tint = iconColor.copy(alpha = if (state.canSkipNext) 0.95f else 0.35f),
                             )
                         }
                     }
@@ -407,7 +420,7 @@ private fun AppSourceIcon(packageName: String, modifier: Modifier = Modifier) {
             Icons.Default.MusicNote,
             contentDescription = null,
             modifier = modifier,
-            tint = Color.White.copy(alpha = 0.65f),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
         )
     }
 }
@@ -415,6 +428,7 @@ private fun AppSourceIcon(packageName: String, modifier: Modifier = Modifier) {
 @Composable
 private fun MediaBackgroundArt(albumArtUri: String?) {
     val context = LocalContext.current
+    val isDarkTheme = isSystemInDarkTheme()
     Box(Modifier.fillMaxSize()) {
         if (albumArtUri.isNullOrBlank()) {
             Box(
@@ -423,8 +437,8 @@ private fun MediaBackgroundArt(albumArtUri: String?) {
                     .background(
                         Brush.linearGradient(
                             colors = listOf(
-                                Color(0xFF1A2744),
-                                Color(0xFF0D1B2A),
+                                if (isDarkTheme) Color(0xFF1A2744) else MaterialTheme.colorScheme.surfaceVariant,
+                                if (isDarkTheme) Color(0xFF0D1B2A) else MaterialTheme.colorScheme.surface,
                             ),
                         ),
                     ),
@@ -453,7 +467,9 @@ private fun MediaBackgroundArt(albumArtUri: String?) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color(0xFF0D1B2A)),
+                            .background(
+                                if (isDarkTheme) Color(0xFF0D1B2A) else MaterialTheme.colorScheme.surface,
+                            ),
                     )
                 },
             )

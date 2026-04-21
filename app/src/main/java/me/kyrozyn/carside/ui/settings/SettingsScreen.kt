@@ -48,6 +48,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onKelolaDownloadMaps: () -> Unit,
     onOpenLauncherSettings: () -> Unit,
+    onOpenPrivacyPolicy: () -> Unit,
     speedWarningEnabled: Boolean,
     onSpeedWarningEnabledChange: (Boolean) -> Unit,
     onTestSpeedWarningSound: () -> Unit,
@@ -198,6 +199,44 @@ fun SettingsScreen(
                         )
                         Text(
                             text = "Unduh peta OSM untuk dipakai offline, hapus wilayah, atau tambah wilayah baru.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // ── Privacy policy ──────────────────────────────────────────────
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenPrivacyPolicy),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Privacy Policy",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = "Lihat kebijakan privasi resmi Carside.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
