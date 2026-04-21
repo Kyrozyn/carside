@@ -91,6 +91,7 @@ private const val LOCATION_LAYER_ID = "location-layer"
 private const val LOCATION_ICON_ID = "location-dot"
 private const val OSM_TRAFFIC_SOURCE_ID = "osm-google-traffic-source"
 private const val OSM_TRAFFIC_LAYER_ID = "osm-google-traffic-layer"
+private const val TABLET_MIN_WIDTH_DP = 600
 
 private val GOOGLE_TRAFFIC_TILE_URLS = arrayOf(
     "https://mt0.google.com/vt/lyrs=m@221097413,traffic&x={x}&y={y}&z={z}",
@@ -482,7 +483,8 @@ private fun loadMapStyle(
     mapState: MapState,
     context: android.content.Context,
 ) {
-    val dotBitmap = locationDotBitmap(72)
+    val dotBitmap = locationDotBitmap(60)
+    val locationDotScale = locationDotScale(context)
     val styleUri = when (style) {
         MapStyle.GOOGLE -> Style.Builder().fromJson(GOOGLE_STYLE_JSON)
         MapStyle.GOOGLE_DARK -> Style.Builder().fromJson(GOOGLE_DARK_STYLE_JSON)
@@ -529,7 +531,7 @@ private fun loadMapStyle(
             loadedStyle.addLayer(
                 SymbolLayer(LOCATION_LAYER_ID, LOCATION_SOURCE_ID).withProperties(
                     iconImage(LOCATION_ICON_ID),
-                    iconSize(1.0f),
+                    iconSize(locationDotScale),
                     iconAllowOverlap(true),
                     iconIgnorePlacement(true),
                     iconRotationAlignment(
@@ -542,6 +544,11 @@ private fun loadMapStyle(
         mapState.styleLoaded = true
         applyLocationAndBearing(map, mapState, style)
     }
+}
+
+private fun locationDotScale(context: android.content.Context): Float {
+    val smallestWidthDp = context.resources.configuration.smallestScreenWidthDp
+    return if (smallestWidthDp >= TABLET_MIN_WIDTH_DP) 0.72f else 1.0f
 }
 
 private fun applyLocationAndBearing(
