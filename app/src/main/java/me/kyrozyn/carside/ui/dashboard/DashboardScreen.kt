@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Podcasts
-import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -83,7 +82,6 @@ fun DashboardScreen(
     onPrevious: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onOpenAppDrawer: () -> Unit,
-    onOpenRadio: () -> Unit,
     onOpenInternetRadio: () -> Unit,
     onOpenSettings: () -> Unit,
     internetRadioState: InternetRadioState,
@@ -274,7 +272,7 @@ fun DashboardScreen(
             }
         }
 
-        // Tombol Garage + Radio (pojok kanan atas)
+        // Tombol Garage + Radio Internet (pojok kanan atas)
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -305,19 +303,6 @@ fun DashboardScreen(
                     Icon(
                         Icons.Default.Podcasts,
                         contentDescription = "Radio Internet",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(26.dp),
-                    )
-                }
-                IconButton(
-                    onClick = onOpenRadio,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
-                ) {
-                    Icon(
-                        Icons.Default.Radio,
-                        contentDescription = "Radio FM/AM",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(26.dp),
                     )

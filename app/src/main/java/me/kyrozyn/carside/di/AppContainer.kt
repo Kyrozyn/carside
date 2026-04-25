@@ -13,8 +13,6 @@ import me.kyrozyn.carside.data.location.FusedLocationDataSource
 import me.kyrozyn.carside.data.map.NoOpMapSession
 import me.kyrozyn.carside.data.media.SystemMediaSessionRepository
 import me.kyrozyn.carside.data.navigation.NavigationRepository
-import me.kyrozyn.carside.data.radio.HardwareRadioController
-import me.kyrozyn.carside.data.radio.NoOpRadioController
 import me.kyrozyn.carside.data.db.CarsideDatabase
 import me.kyrozyn.carside.data.fuel.RoomFuelRepository
 import me.kyrozyn.carside.data.alert.SoftSpeedTonePlayer
@@ -28,7 +26,6 @@ import me.kyrozyn.carside.domain.repository.LocationProvider
 import me.kyrozyn.carside.domain.repository.FuelRepository
 import me.kyrozyn.carside.domain.repository.MapSession
 import me.kyrozyn.carside.domain.repository.MediaController
-import me.kyrozyn.carside.domain.repository.RadioController
 import me.kyrozyn.carside.domain.repository.TripRepository
 import me.kyrozyn.carside.domain.repository.WeatherRepository
 
@@ -46,14 +43,6 @@ class AppContainer(context: Context) {
     val settingsRepository = AppSettingsRepository(appContext)
     val softSpeedTonePlayer = SoftSpeedTonePlayer(appContext)
     val offlineMapsRepository = OfflineMapsRepository(appContext)
-    val radioController: RadioController = runCatching {
-        HardwareRadioController(appContext, settingsRepository)
-    }.getOrElse {
-        NoOpRadioController(
-            initialPresets = settingsRepository.radioPresets.value,
-            reason = "Radio tidak tersedia: ${it.message}",
-        )
-    }
     val internetRadioController: InternetRadioController =
         InternetRadioControllerImpl(appContext, settingsRepository)
 

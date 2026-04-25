@@ -35,13 +35,12 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import me.kyrozyn.carside.ui.apps.AppDrawerScreen
+import me.kyrozyn.carside.ui.internetradio.InternetRadioScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardViewModel
-import me.kyrozyn.carside.ui.internetradio.InternetRadioScreen
 import me.kyrozyn.carside.ui.garage.GarageScreen
 import me.kyrozyn.carside.ui.offlinemaps.AddOfflineMapScreen
 import me.kyrozyn.carside.ui.offlinemaps.OfflineMapsScreen
-import me.kyrozyn.carside.ui.radio.RadioScreen
 import me.kyrozyn.carside.ui.settings.SettingsScreen
 import me.kyrozyn.carside.ui.theme.CarsideTheme
 
@@ -71,7 +70,6 @@ class MainActivity : ComponentActivity() {
                 var notificationListenerEnabled by remember { mutableStateOf(false) }
                 var showNotificationAccessDialog by remember { mutableStateOf(false) }
                 var showAppDrawer by remember { mutableStateOf(false) }
-                var showRadio by remember { mutableStateOf(false) }
                 var showInternetRadio by remember { mutableStateOf(false) }
                 var showGarage by remember { mutableStateOf(false) }
                 var showSettings by remember { mutableStateOf(false) }
@@ -174,11 +172,6 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                     )
-                } else if (showRadio) {
-                    RadioScreen(
-                        container = container,
-                        onBack = { showRadio = false },
-                    )
                 } else if (showInternetRadio) {
                     InternetRadioScreen(
                         container = container,
@@ -259,7 +252,6 @@ class MainActivity : ComponentActivity() {
                         onPrevious = vm::onPrevious,
                         onSeekTo = vm::onSeekTo,
                         onOpenAppDrawer = { showAppDrawer = true },
-                        onOpenRadio = { showRadio = true },
                         onOpenInternetRadio = { showInternetRadio = true },
                         onOpenSettings = { showSettings = true },
                         onOpenGarage = { showGarage = true },

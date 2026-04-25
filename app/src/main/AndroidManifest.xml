@@ -14,12 +14,6 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <uses-feature
-        android:name="android.hardware.broadcastradio"
-        android:required="false" />
-    <uses-permission
-        android:name="android.permission.ACCESS_BROADCAST_RADIO"
-        tools:ignore="ProtectedPermissions" />
 
     <application
         android:name=".CarsideApplication"

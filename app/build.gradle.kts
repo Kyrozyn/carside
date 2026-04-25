@@ -19,7 +19,7 @@ android {
         applicationId = "me.kyrozyn.carside"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
+        versionCode = 8
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -47,8 +47,6 @@ android {
 }
 
 dependencies {
-    compileOnly(project(":radio-stubs"))
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
