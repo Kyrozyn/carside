@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
                 val offlineDownloadActive by container.offlineMapsRepository.activeDownload.collectAsStateWithLifecycle()
                 val offlineRegions by container.offlineMapsRepository.regions.collectAsStateWithLifecycle()
                 val speedWarningEnabled by container.settingsRepository.speedWarningEnabled.collectAsStateWithLifecycle()
+                val locationDotSize by container.settingsRepository.locationDotSize.collectAsStateWithLifecycle()
                 val context = LocalContext.current
                 val lifecycleOwner = LocalLifecycleOwner.current
                 
@@ -238,6 +239,7 @@ class MainActivity : ComponentActivity() {
                             onTestSpeedWarningSound = { container.softSpeedTonePlayer.play() },
                             selectedPalette = selectedPalette,
                             onPaletteSelected = { container.settingsRepository.setSelectedPalette(it) },
+                            settingsRepository = container.settingsRepository,
                         )
                     }
                 } else {
@@ -281,6 +283,7 @@ class MainActivity : ComponentActivity() {
                         onCloseWeatherDetails = vm::closeWeatherDetails,
                         offlineDownloadActive = offlineDownloadActive,
                         hasOfflineMaps = hasOfflineMaps,
+                        locationDotSize = locationDotSize,
                     )
                 }
             }

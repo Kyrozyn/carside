@@ -195,6 +195,7 @@ fun MapPane(
     onNavigationClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     useOfflineStyle: Boolean = false,
+    locationDotSize: Float = 60f,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -215,6 +216,10 @@ fun MapPane(
     val latestPermissionForFab by rememberUpdatedState(hasLocationPermission)
 
     val mapView = remember(context) { MapView(context) }
+
+    val locationDotBitmap = remember(locationDotSize) {
+        locationDotBitmap(locationDotSize.toInt())
+    }
 
     // Lifecycle MapLibre
     DisposableEffect(lifecycleOwner) {
@@ -245,19 +250,19 @@ fun MapPane(
                 isLogoEnabled = false
                 isAttributionEnabled = false
             }
-            loadMapStyle(map, mapStyle, mapState, context, useOfflineStyle)
+            loadMapStyle(map, mapStyle, mapState, context, useOfflineStyle, locationDotBitmap)
         }
     }
 
     // Ganti style saat mode berubah
-    LaunchedEffect(mapStyle) {
+    LaunchedEffect(mapStyle, locationDotBitmap) {
         val map = mapState.map ?: return@LaunchedEffect
         mapState.styleLoaded = false
-        loadMapStyle(map, mapStyle, mapState, context, useOfflineStyle)
+        loadMapStyle(map, mapStyle, mapState, context, useOfflineStyle, locationDotBitmap)
     }
 
     // Update lokasi + bearing
-    LaunchedEffect(userLocation, bearing, hasLocationPermission) {
+    LaunchedEffect(userLocation, bearing, hasLocationPermission, mapState.styleLoaded) {
         val map = mapState.map ?: return@LaunchedEffect
         if (!hasLocationPermission || userLocation == null) return@LaunchedEffect
 
@@ -462,7 +467,7 @@ fun MapPane(
                             if (mapStyle == MapStyle.GOOGLE || mapStyle == MapStyle.GOOGLE_DARK) {
                                 mapState.styleLoaded = false
                                 mapState.skipCameraApplyLocation = true
-                                loadMapStyle(map, mapStyle, mapState, context, useOfflineStyle)
+                                loadMapStyle(map, mapStyle, mapState, context, useOfflineStyle, locationDotBitmap)
                             }
                             map.animateCamera(
                                 CameraUpdateFactory.newCameraPosition(
@@ -486,8 +491,8 @@ private fun loadMapStyle(
     mapState: MapState,
     context: android.content.Context,
     useOfflineStyle: Boolean = false,
+    dotBitmap: android.graphics.Bitmap,
 ) {
-    val dotBitmap = locationDotBitmap(60)
     val locationDotScale = locationDotScale(context)
     val styleUri = when (style) {
         MapStyle.GOOGLE -> Style.Builder().fromJson(GOOGLE_STYLE_JSON)
@@ -524,32 +529,35 @@ private fun loadMapStyle(
             }
         }
 
-        if (loadedStyle.getSource(LOCATION_SOURCE_ID) == null) {
-            loadedStyle.addSource(GeoJsonSource(LOCATION_SOURCE_ID))
+        // Remove old layer and source if they exist
+        loadedStyle.getLayer(LOCATION_LAYER_ID)?.let { loadedStyle.removeLayer(it) }
+        loadedStyle.getSource(LOCATION_SOURCE_ID)?.let { loadedStyle.removeSource(it) }
+
+        // Always recreate location source and layer
+        val locationSource = GeoJsonSource(LOCATION_SOURCE_ID)
+        loadedStyle.addSource(locationSource)
+
+        val useMapRotation = when (style) {
+            MapStyle.GOOGLE,
+            MapStyle.GOOGLE_DARK,
+            -> false
+            MapStyle.OSM,
+            MapStyle.OSM_DARK,
+            MapStyle.OSM_GOOGLE_TRAFFIC,
+            MapStyle.OSM_GOOGLE_TRAFFIC_DARK,
+            -> true
         }
-        if (loadedStyle.getLayer(LOCATION_LAYER_ID) == null) {
-            val useMapRotation = when (style) {
-                MapStyle.GOOGLE,
-                MapStyle.GOOGLE_DARK,
-                -> false
-                MapStyle.OSM,
-                MapStyle.OSM_DARK,
-                MapStyle.OSM_GOOGLE_TRAFFIC,
-                MapStyle.OSM_GOOGLE_TRAFFIC_DARK,
-                -> true
-            }
-            loadedStyle.addLayer(
-                SymbolLayer(LOCATION_LAYER_ID, LOCATION_SOURCE_ID).withProperties(
-                    iconImage(LOCATION_ICON_ID),
-                    iconSize(locationDotScale),
-                    iconAllowOverlap(true),
-                    iconIgnorePlacement(true),
-                    iconRotationAlignment(
-                        if (useMapRotation) "map" else "viewport",
-                    ),
+        loadedStyle.addLayer(
+            SymbolLayer(LOCATION_LAYER_ID, LOCATION_SOURCE_ID).withProperties(
+                iconImage(LOCATION_ICON_ID),
+                iconSize(locationDotScale),
+                iconAllowOverlap(true),
+                iconIgnorePlacement(true),
+                iconRotationAlignment(
+                    if (useMapRotation) "map" else "viewport",
+                ),
                 ),
             )
-        }
 
         mapState.styleLoaded = true
         applyLocationAndBearing(map, mapState, style)
@@ -570,8 +578,12 @@ private fun applyLocationAndBearing(
     val bearing = mapState.pendingBearing
 
     val mapStyleObj = map.style ?: return
-    (mapStyleObj.getSource(LOCATION_SOURCE_ID) as? GeoJsonSource)
-        ?.setGeoJson(Feature.fromGeometry(Point.fromLngLat(loc.longitude, loc.latitude)))
+    val source = mapStyleObj.getSource(LOCATION_SOURCE_ID) as? GeoJsonSource
+    if (source == null) {
+        android.util.Log.w("MapPane", "Location source not found, skipping location update")
+        return
+    }
+    source.setGeoJson(Feature.fromGeometry(Point.fromLngLat(loc.longitude, loc.latitude)))
 
     if (mapState.skipCameraApplyLocation) {
         mapState.skipCameraApplyLocation = false

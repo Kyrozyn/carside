@@ -97,6 +97,7 @@ fun DashboardScreen(
     offlineDownloadActive: ActiveOfflineDownload? = null,
     onOpenGarage: () -> Unit = {},
     hasOfflineMaps: Boolean = false,
+    locationDotSize: Float = 60f,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -161,6 +162,7 @@ fun DashboardScreen(
                             } else null,
                             modifier = Modifier.fillMaxSize(),
                             useOfflineStyle = hasOfflineMaps,
+                            locationDotSize = locationDotSize,
                         )
                     }
                 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -30,16 +31,20 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import me.kyrozyn.carside.data.settings.AppSettingsRepository
 import me.kyrozyn.carside.ui.theme.AppThemePalette
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,6 +59,7 @@ fun SettingsScreen(
     onTestSpeedWarningSound: () -> Unit,
     selectedPalette: AppThemePalette,
     onPaletteSelected: (AppThemePalette) -> Unit,
+    settingsRepository: AppSettingsRepository,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
@@ -170,6 +176,50 @@ fun SettingsScreen(
                     Switch(
                         checked = speedWarningEnabled,
                         onCheckedChange = onSpeedWarningEnabledChange,
+                    )
+                }
+            }
+
+            // ── Ukuran titik lokasi ───────────────────────────────────────
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Ukuran Titik Lokasi",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val dotSize by settingsRepository.locationDotSize.collectAsState()
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "${dotSize.toInt()}px",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.width(60.dp),
+                        )
+                        Slider(
+                            value = dotSize,
+                            onValueChange = { settingsRepository.setLocationDotSize(it) },
+                            valueRange = 40f..100f,
+                            steps = 11,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+
+                    Text(
+                        text = "Atur ukuran indikator lokasi Anda saat ini di peta",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

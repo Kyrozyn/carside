@@ -34,6 +34,11 @@ class AppSettingsRepository(context: Context) {
     )
     val selectedPalette: StateFlow<AppThemePalette> = _selectedPalette.asStateFlow()
 
+    private val _locationDotSize = MutableStateFlow(
+        prefs.getFloat(KEY_LOCATION_DOT_SIZE, DEFAULT_LOCATION_DOT_SIZE)
+    )
+    val locationDotSize: StateFlow<Float> = _locationDotSize.asStateFlow()
+
     fun setUseGpsForwardMapBearing(enabled: Boolean) {
         if (_useGpsForwardMapBearing.value == enabled) return
         _useGpsForwardMapBearing.value = enabled
@@ -50,6 +55,12 @@ class AppSettingsRepository(context: Context) {
         if (_selectedPalette.value == palette) return
         _selectedPalette.value = palette
         prefs.edit().putString(KEY_SELECTED_PALETTE, palette.name).apply()
+    }
+
+    fun setLocationDotSize(size: Float) {
+        if (_locationDotSize.value == size) return
+        _locationDotSize.value = size
+        prefs.edit().putFloat(KEY_LOCATION_DOT_SIZE, size).apply()
     }
 
     fun setShortcutPackage(slot: Int, packageName: String?) {
@@ -156,5 +167,7 @@ class AppSettingsRepository(context: Context) {
         private const val SHORTCUT_SLOT_COUNT = 4
         private const val KEY_INTERNET_RADIO_FAVORITES = "internet_radio_favorites"
         private const val KEY_SELECTED_PALETTE = "selected_palette"
+        private const val KEY_LOCATION_DOT_SIZE = "location_dot_size"
+        private const val DEFAULT_LOCATION_DOT_SIZE = 60f
     }
 }
