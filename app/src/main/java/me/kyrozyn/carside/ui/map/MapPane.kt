@@ -59,7 +59,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.kyrozyn.carside.data.location.FAB_STREET_MAX_CHARS
 import me.kyrozyn.carside.data.location.reverseGeocodeResult
+import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_DARK_OFFLINE_STYLE_URL
 import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_DARK_STYLE_URL
+import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_LIBERTY_OFFLINE_STYLE_URL
 import me.kyrozyn.carside.data.map.OPEN_FREE_MAP_LIBERTY_STYLE_URL
 import me.kyrozyn.carside.domain.model.GeoLocation
 import org.maplibre.android.camera.CameraPosition
@@ -192,12 +194,13 @@ fun MapPane(
     bearing: Float = 0f,
     onNavigationClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    useOfflineStyle: Boolean = false,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 
-    var mapStyle by remember { mutableStateOf(MapStyle.GOOGLE) }
+    var mapStyle by remember { mutableStateOf(MapStyle.OSM) }
     var showStreetSheet by remember { mutableStateOf(false) }
     var streetLoading by remember { mutableStateOf(false) }
     var streetResult by remember { mutableStateOf<String?>(null) }
@@ -242,7 +245,7 @@ fun MapPane(
                 isLogoEnabled = false
                 isAttributionEnabled = false
             }
-            loadMapStyle(map, mapStyle, mapState, context)
+            loadMapStyle(map, mapStyle, mapState, context, useOfflineStyle)
         }
     }
 
@@ -250,7 +253,7 @@ fun MapPane(
     LaunchedEffect(mapStyle) {
         val map = mapState.map ?: return@LaunchedEffect
         mapState.styleLoaded = false
-        loadMapStyle(map, mapStyle, mapState, context)
+        loadMapStyle(map, mapStyle, mapState, context, useOfflineStyle)
     }
 
     // Update lokasi + bearing
@@ -459,7 +462,7 @@ fun MapPane(
                             if (mapStyle == MapStyle.GOOGLE || mapStyle == MapStyle.GOOGLE_DARK) {
                                 mapState.styleLoaded = false
                                 mapState.skipCameraApplyLocation = true
-                                loadMapStyle(map, mapStyle, mapState, context)
+                                loadMapStyle(map, mapStyle, mapState, context, useOfflineStyle)
                             }
                             map.animateCamera(
                                 CameraUpdateFactory.newCameraPosition(
@@ -482,6 +485,7 @@ private fun loadMapStyle(
     style: MapStyle,
     mapState: MapState,
     context: android.content.Context,
+    useOfflineStyle: Boolean = false,
 ) {
     val dotBitmap = locationDotBitmap(60)
     val locationDotScale = locationDotScale(context)
@@ -490,10 +494,16 @@ private fun loadMapStyle(
         MapStyle.GOOGLE_DARK -> Style.Builder().fromJson(GOOGLE_DARK_STYLE_JSON)
         MapStyle.OSM_GOOGLE_TRAFFIC,
         MapStyle.OSM,
-        -> Style.Builder().fromUri(OPEN_FREE_MAP_LIBERTY_STYLE_URL)
+        -> Style.Builder().fromUri(
+            if (useOfflineStyle) OPEN_FREE_MAP_LIBERTY_OFFLINE_STYLE_URL
+            else OPEN_FREE_MAP_LIBERTY_STYLE_URL
+        )
         MapStyle.OSM_GOOGLE_TRAFFIC_DARK,
         MapStyle.OSM_DARK,
-        -> Style.Builder().fromUri(OPEN_FREE_MAP_DARK_STYLE_URL)
+        -> Style.Builder().fromUri(
+            if (useOfflineStyle) OPEN_FREE_MAP_DARK_OFFLINE_STYLE_URL
+            else OPEN_FREE_MAP_DARK_STYLE_URL
+        )
     }
 
     map.setStyle(styleUri) { loadedStyle ->

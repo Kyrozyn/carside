@@ -63,9 +63,16 @@ class MainActivity : ComponentActivity() {
                 val uiState by vm.uiState.collectAsStateWithLifecycle()
                 val internetRadioState by container.internetRadioController.state.collectAsStateWithLifecycle()
                 val offlineDownloadActive by container.offlineMapsRepository.activeDownload.collectAsStateWithLifecycle()
+                val offlineRegions by container.offlineMapsRepository.regions.collectAsStateWithLifecycle()
                 val speedWarningEnabled by container.settingsRepository.speedWarningEnabled.collectAsStateWithLifecycle()
                 val context = LocalContext.current
                 val lifecycleOwner = LocalLifecycleOwner.current
+                
+                val hasOfflineMaps = offlineRegions.isNotEmpty()
+
+                LaunchedEffect(Unit) {
+                    container.offlineMapsRepository.refreshRegions()
+                }
 
                 var notificationListenerEnabled by remember { mutableStateOf(false) }
                 var showNotificationAccessDialog by remember { mutableStateOf(false) }
@@ -273,6 +280,7 @@ class MainActivity : ComponentActivity() {
                         onOpenWeatherDetails = vm::openWeatherDetails,
                         onCloseWeatherDetails = vm::closeWeatherDetails,
                         offlineDownloadActive = offlineDownloadActive,
+                        hasOfflineMaps = hasOfflineMaps,
                     )
                 }
             }

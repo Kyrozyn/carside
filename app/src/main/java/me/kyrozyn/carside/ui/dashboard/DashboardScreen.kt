@@ -96,6 +96,7 @@ fun DashboardScreen(
     /** Unduhan peta offline aktif (background); banner tipis di atas peta. */
     offlineDownloadActive: ActiveOfflineDownload? = null,
     onOpenGarage: () -> Unit = {},
+    hasOfflineMaps: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -159,6 +160,7 @@ fun DashboardScreen(
                                 { showMapOverride = false }
                             } else null,
                             modifier = Modifier.fillMaxSize(),
+                            useOfflineStyle = hasOfflineMaps,
                         )
                     }
                 }
