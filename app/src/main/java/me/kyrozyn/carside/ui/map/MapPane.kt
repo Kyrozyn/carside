@@ -1,4 +1,4 @@
-package me.kyrozyn.carside.ui.map
+﻿package me.kyrozyn.carside.ui.map
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -117,7 +117,7 @@ private enum class MapStyle {
     OSM_DARK,
 }
 
-// Style JSON untuk Google Maps raster + traffic — teks tidak dirotasi karena raster
+// Style JSON untuk Google Maps raster + traffic ΓÇö teks tidak dirotasi karena raster
 private val GOOGLE_STYLE_JSON = """
 {
   "version": 8,
@@ -171,7 +171,7 @@ private val GOOGLE_DARK_STYLE_JSON = """
 }
 """.trimIndent()
 
-// Vector tiles OpenFreeMap — teks tetap tegak saat dirotasi
+// Vector tiles OpenFreeMap ΓÇö teks tetap tegak saat dirotasi
 
 private class MapState {
     var map: MapLibreMap? = null
@@ -206,7 +206,7 @@ fun MapPane(
     var streetLoading by remember { mutableStateOf(false) }
     var streetResult by remember { mutableStateOf<String?>(null) }
     var streetError by remember { mutableStateOf<String?>(null) }
-    var fabStreetLabel by remember { mutableStateOf("—") }
+    var fabStreetLabel by remember { mutableStateOf("ΓÇö") }
     val streetSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val mapState = remember { MapState() }
     val currentLocation by rememberUpdatedState(userLocation)
@@ -286,7 +286,7 @@ fun MapPane(
             }
             val loc = latestLocationForFab
             if (loc == null) {
-                fabStreetLabel = "Tunggu GPS…".truncateStreetLabel()
+                fabStreetLabel = "Tunggu GPSΓÇª".truncateStreetLabel()
                 delay(1_000L)
                 continue
             }
@@ -322,7 +322,7 @@ fun MapPane(
                     }
                     userLocation == null -> {
                         streetLoading = false
-                        streetError = "Menunggu sinyal GPS… Coba lagi setelah titik lokasi muncul."
+                        streetError = "Menunggu sinyal GPSΓÇª Coba lagi setelah titik lokasi muncul."
                     }
                     else -> {
                         streetLoading = true
@@ -394,7 +394,7 @@ fun MapPane(
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                text = "Mencari alamat dari lokasi saat ini…",
+                                text = "Mencari alamat dari lokasi saat iniΓÇª",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -714,7 +714,7 @@ private fun locationDotBitmap(sizePx: Int): Bitmap {
 /** Maksimal [FAB_STREET_MAX_CHARS] karakter; jika lebih, dipotong dan ditambah ellipsis. */
 private fun String.truncateStreetLabel(maxChars: Int = FAB_STREET_MAX_CHARS): String {
     val t = trim()
-    if (t.isEmpty()) return "—".take(maxChars.coerceAtLeast(1))
+    if (t.isEmpty()) return "ΓÇö".take(maxChars.coerceAtLeast(1))
     if (t.length <= maxChars) return t
-    return t.take(maxChars - 1) + "…"
+    return t.take(maxChars - 1) + "ΓÇª"
 }

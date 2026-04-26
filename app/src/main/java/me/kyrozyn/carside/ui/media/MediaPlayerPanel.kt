@@ -1,8 +1,20 @@
 package me.kyrozyn.carside.ui.media
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,9 +56,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -77,11 +93,11 @@ fun MediaPlayerPanel(
     val isDarkTheme = isSystemInDarkTheme()
     val primaryTextColor = if (isDarkTheme) Color.White else MaterialTheme.colorScheme.onSurface
     val secondaryTextColor = if (isDarkTheme) {
-        Color.White.copy(alpha = 0.82f)
+        Color.White.copy(alpha = 0.75f)
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val iconColor = if (isDarkTheme) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurface
+    val iconColor = if (isDarkTheme) Color.White.copy(alpha = 0.92f) else MaterialTheme.colorScheme.onSurface
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -89,19 +105,23 @@ fun MediaPlayerPanel(
         tonalElevation = 0.dp,
     ) {
         Box(Modifier.fillMaxSize()) {
+            // Blurred background album art
             MediaBackgroundArt(albumArtUri = state.track.albumArtUri)
 
+            // Rich glassmorphism gradient overlay — denser at bottom
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            0f to if (isDarkTheme) Color.Black.copy(alpha = 0.1f)
-                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.08f),
-                            0.35f to if (isDarkTheme) Color.Black.copy(alpha = 0.25f)
-                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
-                            1f to if (isDarkTheme) Color.Black.copy(alpha = 0.82f)
-                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                            0f to if (isDarkTheme) Color.Black.copy(alpha = 0.05f)
+                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.05f),
+                            0.28f to if (isDarkTheme) Color.Black.copy(alpha = 0.30f)
+                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.22f),
+                            0.6f to if (isDarkTheme) Color.Black.copy(alpha = 0.62f)
+                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.70f),
+                            1f to if (isDarkTheme) Color.Black.copy(alpha = 0.90f)
+                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
                         ),
                     ),
             )
@@ -109,34 +129,43 @@ fun MediaPlayerPanel(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
             ) {
-                if (!notificationListenerEnabled) {
+                // Notification access banner
+                AnimatedVisibility(
+                    visible = !notificationListenerEnabled,
+                    enter = fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.95f),
+                    exit = fadeOut(tween(200)) + scaleOut(tween(200)),
+                ) {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 8.dp)
+                            .padding(bottom = 10.dp)
                             .clickable { onOpenNotificationAccessSettings() },
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.92f),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.93f),
+                        shadowElevation = 4.dp,
+                        tonalElevation = 2.dp,
                     ) {
-                        Column(Modifier.padding(12.dp)) {
+                        Column(Modifier.padding(14.dp)) {
                             Text(
                                 text = "Aktifkan akses notifikasi",
                                 style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                             )
                             Text(
                                 text = "Diperlukan agar Spotify & pemutar lain terbaca. Ketuk di sini.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.9f),
+                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f),
                                 modifier = Modifier.padding(top = 4.dp),
                             )
                             Button(
                                 onClick = onOpenNotificationAccessSettings,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 8.dp),
+                                    .padding(top = 10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.error,
                                     contentColor = MaterialTheme.colorScheme.onError,
@@ -148,35 +177,49 @@ fun MediaPlayerPanel(
                     }
                 }
 
+                // Settings button — top right, 48dp touch target
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    IconButton(
-                        onClick = onBrowseClick,
-                        modifier = Modifier.size(40.dp),
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isDarkTheme) Color.White.copy(alpha = 0.08f)
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                            ),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "Pengaturan",
-                            tint = iconColor,
-                            modifier = Modifier.size(22.dp),
-                        )
+                        IconButton(
+                            onClick = onBrowseClick,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "Pengaturan",
+                                tint = iconColor,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
                     }
                 }
 
                 Spacer(Modifier.weight(1f))
 
+                // Main content area
                 Column(Modifier.fillMaxWidth()) {
                     if (state.hasActiveSession) {
+                        // Source app indicator
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(bottom = 10.dp),
+                            modifier = Modifier.padding(bottom = 12.dp),
                         ) {
                             AppSourceIcon(
                                 packageName = state.sourcePackageName,
-                                modifier = Modifier.size(22.dp),
+                                modifier = Modifier.size(20.dp),
                             )
                             Text(
                                 text = state.sourceLabel,
@@ -187,6 +230,7 @@ fun MediaPlayerPanel(
                             )
                         }
 
+                        // Track title
                         Text(
                             text = state.track.title,
                             style = MaterialTheme.typography.headlineSmall,
@@ -201,15 +245,17 @@ fun MediaPlayerPanel(
                             Text(
                                 text = state.track.artist,
                                 style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Normal,
                                 color = secondaryTextColor,
-                                maxLines = 2,
+                                maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
 
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(18.dp))
 
+                        // Progress bar / seek slider
                         if (state.durationMs > 0L) {
                             val progress = (displayPosMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
                             if (state.canSeek) {
@@ -232,22 +278,36 @@ fun MediaPlayerPanel(
                                     },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(28.dp),
+                                        .height(32.dp),
                                     colors = SliderDefaults.colors(
-                                        thumbColor = Color(0xFF42A5F5),
-                                        activeTrackColor = Color(0xFF42A5F5),
-                                        inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = if (isDarkTheme)
+                                            Color.White.copy(alpha = 0.22f)
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                                        activeTickColor = Color.Transparent,
+                                        inactiveTickColor = Color.Transparent,
                                     ),
                                 )
                             } else {
+                                val animatedProgress by animateFloatAsState(
+                                    targetValue = progress,
+                                    animationSpec = tween(500, easing = FastOutSlowInEasing),
+                                    label = "progressAnim",
+                                )
                                 LinearProgressIndicator(
-                                    progress = { progress },
+                                    progress = { animatedProgress },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = Color(0xFF42A5F5),
-                                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
+                                        .height(5.dp)
+                                        .clip(RoundedCornerShape(50)),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = if (isDarkTheme)
+                                        Color.White.copy(alpha = 0.18f)
+                                    else
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                                    strokeCap = StrokeCap.Round,
                                 )
                             }
                             Row(
@@ -258,12 +318,12 @@ fun MediaPlayerPanel(
                             ) {
                                 Text(
                                     text = formatTrackTime(displayPosMs),
-                                    style = MaterialTheme.typography.labelMedium,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = secondaryTextColor,
                                 )
                                 Text(
                                     text = formatTrackTime(state.durationMs),
-                                    style = MaterialTheme.typography.labelMedium,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = secondaryTextColor,
                                 )
                             }
@@ -271,10 +331,14 @@ fun MediaPlayerPanel(
                             LinearProgressIndicator(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(3.dp)
-                                    .clip(RoundedCornerShape(2.dp)),
-                                color = Color(0xFF42A5F5),
-                                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(50)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = if (isDarkTheme)
+                                    Color.White.copy(alpha = 0.18f)
+                                else
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                                strokeCap = StrokeCap.Round,
                             )
                         }
                     } else {
@@ -292,34 +356,49 @@ fun MediaPlayerPanel(
                         )
                     }
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(18.dp))
 
                     val canToggle = state.hasActiveSession && (state.canPlay || state.canPause)
+
+                    // Playback controls row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(
-                            onClick = onPrevious,
+                        // Skip previous
+                        PlayerIconButton(
+                            icon = Icons.Default.SkipPrevious,
+                            contentDescription = "Sebelumnya",
                             enabled = state.canSkipPrevious,
-                            modifier = Modifier.size(52.dp),
-                        ) {
-                            Icon(
-                                Icons.Default.SkipPrevious,
-                                contentDescription = "Sebelumnya",
-                                modifier = Modifier.size(30.dp),
-                                tint = iconColor.copy(alpha = if (state.canSkipPrevious) 0.95f else 0.35f),
-                            )
-                        }
+                            iconColor = iconColor,
+                            size = 56,
+                            iconSize = 30,
+                            onClick = onPrevious,
+                        )
 
+                        // Play/Pause — larger pill button
+                        val playPressSource = remember { MutableInteractionSource() }
+                        val playIsPressed by playPressSource.collectIsPressedAsState()
+                        val playScale by animateFloatAsState(
+                            targetValue = if (playIsPressed) 0.90f else 1f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                            label = "playScaleAnim",
+                        )
                         Box(
                             modifier = Modifier
-                                .size(64.dp)
+                                .size(72.dp)
+                                .scale(playScale)
+                                .shadow(
+                                    elevation = if (canToggle) 12.dp else 0.dp,
+                                    shape = CircleShape,
+                                    ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                )
                                 .clip(CircleShape)
                                 .background(
-                                    if (canToggle) MaterialTheme.colorScheme.primary.copy(alpha = 0.95f)
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f),
+                                    if (canToggle) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -327,32 +406,96 @@ fun MediaPlayerPanel(
                                 onClick = onPlayPause,
                                 enabled = canToggle,
                                 modifier = Modifier.fillMaxSize(),
+                                interactionSource = playPressSource,
                             ) {
-                                Icon(
-                                    imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = if (state.isPlaying) "Jeda" else "Putar",
-                                    modifier = Modifier.size(34.dp),
-                                    tint = if (canToggle) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                )
+                                Box(contentAlignment = Alignment.Center) {
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = state.isPlaying,
+                                        enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+                                        exit = scaleOut(tween(150)),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Pause,
+                                            contentDescription = "Jeda",
+                                            modifier = Modifier.size(38.dp),
+                                            tint = if (canToggle) MaterialTheme.colorScheme.onPrimary
+                                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                        )
+                                    }
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = !state.isPlaying,
+                                        enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+                                        exit = scaleOut(tween(150)),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.PlayArrow,
+                                            contentDescription = "Putar",
+                                            modifier = Modifier.size(38.dp),
+                                            tint = if (canToggle) MaterialTheme.colorScheme.onPrimary
+                                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                        )
+                                    }
+                                }
                             }
                         }
 
-                        IconButton(
-                            onClick = onNext,
+                        // Skip next
+                        PlayerIconButton(
+                            icon = Icons.Default.SkipNext,
+                            contentDescription = "Berikutnya",
                             enabled = state.canSkipNext,
-                            modifier = Modifier.size(52.dp),
-                        ) {
-                            Icon(
-                                Icons.Default.SkipNext,
-                                contentDescription = "Berikutnya",
-                                modifier = Modifier.size(30.dp),
-                                tint = iconColor.copy(alpha = if (state.canSkipNext) 0.95f else 0.35f),
-                            )
-                        }
+                            iconColor = iconColor,
+                            size = 56,
+                            iconSize = 30,
+                            onClick = onNext,
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PlayerIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    iconColor: Color,
+    size: Int,
+    iconSize: Int,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "btnScaleAnim",
+    )
+    Box(
+        modifier = Modifier
+            .size(size.dp)
+            .scale(scale)
+            .clip(CircleShape)
+            .background(
+                if (enabled) Color.White.copy(alpha = 0.10f)
+                else Color.Transparent
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.fillMaxSize(),
+            interactionSource = interactionSource,
+        ) {
+            Icon(
+                icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(iconSize.dp),
+                tint = iconColor.copy(alpha = if (enabled) 0.95f else 0.30f),
+            )
         }
     }
 }
@@ -420,7 +563,7 @@ private fun AppSourceIcon(packageName: String, modifier: Modifier = Modifier) {
             Icons.Default.MusicNote,
             contentDescription = null,
             modifier = modifier,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
         )
     }
 }
@@ -452,14 +595,24 @@ private fun MediaBackgroundArt(albumArtUri: String?) {
             SubcomposeAsyncImage(
                 model = request,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(radius = 28.dp),
                 contentScale = ContentScale.Crop,
                 loading = {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                if (isDarkTheme) Color(0xFF0D1B2A)
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(40.dp),
-                            strokeWidth = 3.dp,
-                            color = Color(0xFF42A5F5),
+                            modifier = Modifier.size(36.dp),
+                            strokeWidth = 2.5.dp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                         )
                     }
                 },

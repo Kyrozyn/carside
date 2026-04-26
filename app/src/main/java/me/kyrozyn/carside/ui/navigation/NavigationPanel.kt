@@ -1,5 +1,7 @@
 package me.kyrozyn.carside.ui.navigation
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,9 +27,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -56,66 +61,86 @@ fun NavigationPanel(
         modifier = modifier.fillMaxSize(),
         color = colors.surface,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp)
-                .padding(top = 72.dp, bottom = 20.dp),
-        ) {
-            SourceBadgeRow(
-                source = state.sourceApp,
-                onOpenSourceApp = onOpenSourceApp,
-                onSwitchToMap = onSwitchToMap,
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            Row(
+        Box(Modifier.fillMaxSize()) {
+            // Top gradient accent
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
+                    .height(3.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(colors.primary, colors.tertiary),
+                        ),
+                    ),
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 72.dp, bottom = 20.dp),
             ) {
-                ManeuverIconTile(
-                    iconUri = state.iconUri,
-                    distanceText = state.distanceText,
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(0.45f),
+                SourceBadgeRow(
+                    source = state.sourceApp,
+                    onOpenSourceApp = onOpenSourceApp,
+                    onSwitchToMap = onSwitchToMap,
                 )
 
-                Spacer(Modifier.width(20.dp))
+                Spacer(Modifier.height(16.dp))
 
-                Column(
+                Row(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(0.55f),
-                    verticalArrangement = Arrangement.Center,
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = state.maneuverText ?: "—",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                    ManeuverIconTile(
+                        iconUri = state.iconUri,
+                        distanceText = state.distanceText,
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(0.45f),
                     )
-                    state.roadText?.let { road ->
-                        Spacer(Modifier.height(8.dp))
+
+                    Spacer(Modifier.width(20.dp))
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(0.55f),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
                         Text(
-                            text = road,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = colors.onSurfaceVariant,
+                            text = state.maneuverText ?: "—",
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.onSurface,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        state.roadText?.let { road ->
+                            Spacer(Modifier.height(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = colors.surfaceVariant.copy(alpha = 0.6f),
+                            ) {
+                                Text(
+                                    text = road,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = colors.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                )
+                            }
+                        }
                     }
                 }
-            }
 
-            state.etaText?.let { eta ->
-                Spacer(Modifier.height(12.dp))
-                EtaFooter(etaText = eta)
+                state.etaText?.let { eta ->
+                    Spacer(Modifier.height(12.dp))
+                    EtaFooter(etaText = eta)
+                }
             }
         }
     }
@@ -136,9 +161,10 @@ private fun SourceBadgeRow(
             color = colors.primaryContainer,
             contentColor = colors.onPrimaryContainer,
             shape = RoundedCornerShape(50),
+            shadowElevation = 2.dp,
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -162,10 +188,11 @@ private fun SourceBadgeRow(
                 color = colors.surfaceVariant,
                 contentColor = colors.onSurfaceVariant,
                 shape = RoundedCornerShape(50),
+                shadowElevation = 1.dp,
                 modifier = Modifier.clickable(onClick = onSwitchToMap),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
@@ -186,10 +213,11 @@ private fun SourceBadgeRow(
                     color = colors.secondaryContainer,
                     contentColor = colors.onSecondaryContainer,
                     shape = RoundedCornerShape(50),
+                    shadowElevation = 1.dp,
                     modifier = Modifier.clickable(onClick = onOpenSourceApp),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
@@ -218,9 +246,10 @@ private fun ManeuverIconTile(
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        modifier = modifier,
+        modifier = modifier.shadow(8.dp, RoundedCornerShape(24.dp)),
         color = colors.surfaceVariant,
         shape = RoundedCornerShape(24.dp),
+        tonalElevation = 4.dp,
     ) {
         Column(
             modifier = Modifier
@@ -253,7 +282,7 @@ private fun ManeuverIconTile(
                     Icon(
                         imageVector = Icons.Filled.Navigation,
                         contentDescription = null,
-                        tint = colors.onSurfaceVariant,
+                        tint = colors.primary,
                         modifier = Modifier.size(80.dp),
                     )
                 }
@@ -279,23 +308,31 @@ private fun ManeuverIconTile(
 private fun EtaFooter(etaText: String) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        color = colors.tertiaryContainer.copy(alpha = 0.6f),
+        color = colors.tertiaryContainer,
         contentColor = colors.onTertiaryContainer,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
+        shadowElevation = 2.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(colors.onTertiaryContainer.copy(alpha = 0.6f)),
+            )
+            Spacer(Modifier.width(10.dp))
             Text(
                 text = "ETA",
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Text(
                 text = etaText,
                 style = MaterialTheme.typography.titleMedium,

@@ -1,6 +1,8 @@
 package me.kyrozyn.carside.ui.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,13 +19,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Policy
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -42,6 +53,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.kyrozyn.carside.data.settings.AppSettingsRepository
@@ -71,7 +84,7 @@ fun SettingsScreen(
                 title = {
                     Text(
                         "Pengaturan",
-                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleLarge,
                     )
                 },
                 navigationIcon = {
@@ -90,215 +103,282 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "Di sini Anda mengatur fitur yang sebelumnya ada di peta atau tempat lain. " +
-                    "Pilihan lain bisa ditambahkan nanti.",
-                style = MaterialTheme.typography.bodySmall,
+                text = "Sesuaikan pengaturan Carside untuk pengalaman berkendara terbaik.",
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
 
-            // ── Tema Aplikasi ─────────────────────────────────────────────
             ThemePaletteCard(
                 selectedPalette = selectedPalette,
                 onPaletteSelected = onPaletteSelected,
             )
 
-            // ── Launcher / layar utama ────────────────────────────────────
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            // ── Launcher / layar utama ──────────────────────────────────
+            SettingsCardWithIcon(
+                icon = Icons.Outlined.Home,
+                iconTint = MaterialTheme.colorScheme.tertiary,
+                iconBackground = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
+                title = "Launcher / Layar Utama",
+                description = "Carside bisa dipakai sebagai aplikasi layar utama (launcher) di mobil. " +
+                    "Setelah itu tombol Home sistem akan membuka Carside.",
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Launcher / layar utama",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = "Carside bisa dipakai sebagai aplikasi layar utama (launcher) di mobil. " +
-                            "Setelah itu tombol Home sistem akan membuka Carside. " +
-                            "Pilih Carside di pengaturan Android sebagai aplikasi layar utama.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                    OutlinedButton(
-                        onClick = onOpenLauncherSettings,
-                        modifier = Modifier.padding(top = 10.dp),
-                    ) {
-                        Text("Buka pengaturan launcher")
-                    }
+                OutlinedButton(
+                    onClick = onOpenLauncherSettings,
+                    modifier = Modifier.padding(top = 12.dp),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text("Buka pengaturan launcher")
                 }
             }
 
-            // ── Peringatan kecepatan ──────────────────────────────────────
-            Card(
+            // ── Peringatan kecepatan ────────────────────────────────────
+            ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                shape = RoundedCornerShape(16.dp),
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top,
                 ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text(
-                            text = "Peringatan kecepatan (>90 km/h)",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Outlined.Speed,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(22.dp),
                         )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Peringatan Kecepatan",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f).padding(end = 8.dp),
+                            )
+                            Switch(
+                                checked = speedWarningEnabled,
+                                onCheckedChange = onSpeedWarningEnabledChange,
+                                colors = SwitchDefaults.colors(
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                ),
+                            )
+                        }
                         Text(
-                            text = "Satu nada lembut saat kecepatan baru melewati 90 km/h. " +
-                                "Paling banyak sekali tiap 10 menit.",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = "Nada lembut saat kecepatan melewati 90 km/h. Maksimal sekali tiap 10 menit.",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
                         )
                         OutlinedButton(
                             onClick = onTestSpeedWarningSound,
-                            modifier = Modifier.padding(top = 10.dp),
+                            modifier = Modifier.padding(top = 12.dp),
+                            shape = RoundedCornerShape(12.dp),
                         ) {
-                            Text("Tes suara")
+                            Text("Tes suara peringatan")
                         }
                     }
-                    Switch(
-                        checked = speedWarningEnabled,
-                        onCheckedChange = onSpeedWarningEnabledChange,
-                    )
                 }
             }
 
-            // ── Ukuran titik lokasi ───────────────────────────────────────
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            // ── Ukuran titik lokasi ─────────────────────────────────────
+            SettingsCardWithIcon(
+                icon = Icons.Outlined.LocationOn,
+                iconTint = MaterialTheme.colorScheme.primary,
+                iconBackground = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                title = "Ukuran Titik Lokasi",
+                description = "Atur ukuran indikator lokasi Anda saat ini di peta.",
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Ukuran Titik Lokasi",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val dotSize by settingsRepository.locationDotSize.collectAsState()
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                val dotSize by settingsRepository.locationDotSize.collectAsState()
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = "${dotSize.toInt()}px",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.width(60.dp),
-                        )
-                        Slider(
-                            value = dotSize,
-                            onValueChange = { settingsRepository.setLocationDotSize(it) },
-                            valueRange = 40f..100f,
-                            steps = 11,
-                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
-
-                    Text(
-                        text = "Atur ukuran indikator lokasi Anda saat ini di peta",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Slider(
+                        value = dotSize,
+                        onValueChange = { settingsRepository.setLocationDotSize(it) },
+                        valueRange = 40f..100f,
+                        steps = 11,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
 
-            // ── Kelola download maps ──────────────────────────────────────
-            Card(
+            // ── Kelola download maps ────────────────────────────────────
+            SettingsNavCard(
+                icon = Icons.Outlined.Map,
+                iconTint = MaterialTheme.colorScheme.secondary,
+                iconBackground = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                title = "Kelola Unduhan Peta",
+                description = "Unduh peta OSM untuk dipakai offline, hapus wilayah, atau tambah wilayah baru.",
+                onClick = onKelolaDownloadMaps,
+            )
+
+            // ── Privacy policy ──────────────────────────────────────────
+            SettingsNavCard(
+                icon = Icons.Outlined.Policy,
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                iconBackground = MaterialTheme.colorScheme.surfaceContainerHighest,
+                title = "Privacy Policy",
+                description = "Lihat kebijakan privasi resmi Carside.",
+                onClick = onOpenPrivacyPolicy,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsCardWithIcon(
+    icon: ImageVector,
+    iconTint: Color,
+    iconBackground: Color,
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+    content: (@Composable () -> Unit)? = null,
+) {
+    ElevatedCard(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onKelolaDownloadMaps),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(iconBackground),
+                contentAlignment = Alignment.Center,
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Kelola download maps",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = "Unduh peta OSM untuk dipakai offline, hapus wilayah, atau tambah wilayah baru.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(22.dp),
+                )
             }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                content?.invoke()
+            }
+        }
+    }
+}
 
-            // ── Privacy policy ──────────────────────────────────────────────
-            Card(
+@Composable
+private fun SettingsNavCard(
+    icon: ImageVector,
+    iconTint: Color,
+    iconBackground: Color,
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ElevatedCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onOpenPrivacyPolicy),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(iconBackground),
+                contentAlignment = Alignment.Center,
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Privacy Policy",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = "Lihat kebijakan privasi resmi Carside.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(22.dp),
+                )
             }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(24.dp),
+            )
         }
     }
 }
@@ -316,34 +396,56 @@ private fun ThemePaletteCard(
     val darkPalettes = AppThemePalette.entries.filter { it.isDark }
     val lightPalettes = AppThemePalette.entries.filter { !it.isDark }
 
-    Card(
+    ElevatedCard(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(16.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Tema Aplikasi",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = "Pilih palet warna untuk tampilan aplikasi. Palet tidak bisa dikustomisasi.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.Palette,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                Column {
+                    Text(
+                        text = "Tema Aplikasi",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = "Pilih palet warna tampilan",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
 
-            // Tema Gelap
+            Spacer(Modifier.height(16.dp))
+
             Text(
                 text = "TEMA GELAP",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
+                letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified,
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 darkPalettes.forEach { palette ->
                     PaletteRow(
@@ -356,17 +458,17 @@ private fun ThemePaletteCard(
 
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 12.dp),
-                color = MaterialTheme.colorScheme.outlineVariant,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
             )
 
-            // Tema Terang
             Text(
                 text = "TEMA TERANG",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
+                letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified,
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 lightPalettes.forEach { palette ->
                     PaletteRow(
@@ -387,52 +489,76 @@ private fun PaletteRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val selectedBorderColor = MaterialTheme.colorScheme.primary
-    val unselectedBorderColor = MaterialTheme.colorScheme.outlineVariant
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = tween(durationMillis = 200),
+        label = "paletteRowBackground",
+    )
+
+    val borderColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            Color.Transparent
+        },
+        animationSpec = tween(durationMillis = 200),
+        label = "paletteRowBorder",
+    )
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.small)
-            .then(
-                if (isSelected) {
-                    Modifier.border(
-                        width = 1.5.dp,
-                        color = selectedBorderColor,
-                        shape = MaterialTheme.shapes.small,
-                    )
-                } else {
-                    Modifier
-                },
+            .clip(RoundedCornerShape(12.dp))
+            .background(backgroundColor)
+            .border(
+                width = if (isSelected) 1.5.dp else 0.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(12.dp),
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Color swatch
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .size(32.dp)
                 .clip(CircleShape)
-                .background(palette.previewColor),
+                .background(palette.previewColor)
+                .then(
+                    if (isSelected) {
+                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                    } else Modifier,
+                ),
         )
 
-        // Name
         Text(
             text = palette.displayName,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
 
-        // Checkmark when selected
         if (isSelected) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = "Terpilih",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Terpilih",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        } else {
+            Spacer(Modifier.size(24.dp))
         }
     }
 }
