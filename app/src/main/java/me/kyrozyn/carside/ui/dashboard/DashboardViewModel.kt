@@ -23,6 +23,7 @@ import kotlinx.coroutines.delay
 import me.kyrozyn.carside.di.AppContainer
 import me.kyrozyn.carside.domain.model.CompassHeading
 import me.kyrozyn.carside.domain.model.GeoLocation
+import me.kyrozyn.carside.domain.model.LyricsState
 import me.kyrozyn.carside.domain.model.NavigationState
 import me.kyrozyn.carside.domain.model.TripTrackerPhase
 import me.kyrozyn.carside.domain.model.TripTrackerState
@@ -59,6 +60,10 @@ data class DashboardUiState(
     val activeTrip: TripTrackerState,
     /** Snapshot navigasi dari notifikasi Google Maps / Waze. */
     val navigation: NavigationState,
+    /** State lirik lagu yang sedang diputar. */
+    val lyricsState: LyricsState,
+    /** Apakah layar lirik fullscreen terbuka. */
+    val lyricsFullscreenOpen: Boolean,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -80,6 +85,9 @@ class DashboardViewModel(
     private var weatherFetchJob: Job? = null
     private var lastWeatherFetchLocation: GeoLocation? = null
     private var lastWeatherFetchAtMs: Long = 0L
+    private val _lyricsState = MutableStateFlow<LyricsState>(LyricsState.Idle)
+    private var lyricsFetchJob: Job? = null
+    private val _lyricsFullscreenOpen = MutableStateFlow(false)
 
     private val effectiveLocation = _locationPermission.flatMapLatest { granted ->
         if (granted) container.locationProvider.locationUpdates else flowOf(null)
@@ -106,8 +114,10 @@ class DashboardViewModel(
             shortcutPackages,
             _shortcutPickerSlot,
             _weatherDetailsOpen,
-        ) { shortcuts, pickerSlot, weatherOpen ->
-            Triple(shortcuts, pickerSlot, weatherOpen)
+            _lyricsState,
+            _lyricsFullscreenOpen,
+        ) { shortcuts, pickerSlot, weatherOpen, lyrics, lyricsFs ->
+            Quintuple(shortcuts, pickerSlot, weatherOpen, lyrics, lyricsFs)
         },
         combine(_compass, _browseOpen, _locationPermission, mapRotationMode) { compass, browse, perm, useGps ->
             Quadruple(compass, browse, perm, useGps)
@@ -136,6 +146,8 @@ class DashboardViewModel(
             userLocation = userLoc,
             activeTrip = activeTrip,
             navigation = mediaClock.fourth,
+            lyricsState = shortcutsState.fourth,
+            lyricsFullscreenOpen = shortcutsState.fifth,
         )
     }.stateIn(
         viewModelScope,
@@ -160,6 +172,8 @@ class DashboardViewModel(
                 maxSpeedMps = null,
             ),
             navigation = NavigationState.Idle,
+            lyricsState = LyricsState.Idle,
+            lyricsFullscreenOpen = false,
         ),
     )
 
@@ -181,6 +195,25 @@ class DashboardViewModel(
 
         viewModelScope.launch {
             effectiveLocation.collect { _userLocation.value = it }
+        }
+
+        // Fetch lyrics when track changes, with debounce to avoid thrashing.
+        viewModelScope.launch {
+            var lastKey = ""
+            container.mediaController.playbackState.collect { playback ->
+                val title = playback.track.title
+                val artist = playback.track.artist
+                val key = "$title|$artist"
+                if (key == lastKey || title.isBlank()) return@collect
+                lastKey = key
+                lyricsFetchJob?.cancel()
+                lyricsFetchJob = launch {
+                    _lyricsState.value = LyricsState.Loading
+                    delay(LYRICS_DEBOUNCE_MS)
+                    val durationSec = playback.durationMs / 1_000L
+                    _lyricsState.value = container.lyricsRepository.getLyrics(title, artist, durationSec)
+                }
+            }
         }
 
         // Fetch cuaca saat lokasi berubah signifikan atau interval refresh terlewati.
@@ -290,6 +323,14 @@ class DashboardViewModel(
         _weatherDetailsOpen.value = false
     }
 
+    fun openLyricsFullscreen() {
+        _lyricsFullscreenOpen.value = true
+    }
+
+    fun closeLyricsFullscreen() {
+        _lyricsFullscreenOpen.value = false
+    }
+
     fun onPlayPause() {
         val playing = container.mediaController.playbackState.value.isPlaying
         if (playing) container.mediaController.pause() else container.mediaController.play()
@@ -313,6 +354,8 @@ class DashboardViewModel(
         private const val MPS_TO_KMH = 3.6f
         private const val SPEED_WARNING_THRESHOLD_KMH = 90f
         private const val SPEED_WARNING_COOLDOWN_MS = 10 * 60 * 1_000L
+
+        private const val LYRICS_DEBOUNCE_MS = 600L
 
         /** Saat di bawah ini, arah GPS cenderung noise saat kendaraan diam/pelan. */
         private const val GPS_BEARING_MIN_SPEED_MPS = 2.0f

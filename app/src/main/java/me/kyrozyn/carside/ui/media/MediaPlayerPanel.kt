@@ -75,6 +75,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import me.kyrozyn.carside.domain.model.LyricsState
 import me.kyrozyn.carside.domain.repository.MediaPlaybackState
 
 @Composable
@@ -87,6 +88,7 @@ fun MediaPlayerPanel(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeekTo: (Long) -> Unit,
+    lyricsState: LyricsState = LyricsState.Idle,
     modifier: Modifier = Modifier,
 ) {
     val displayPosMs = rememberDisplayedPositionMs(state)
@@ -206,7 +208,15 @@ fun MediaPlayerPanel(
                     }
                 }
 
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(8.dp))
+
+                LyricsDisplay(
+                    lyricsState = lyricsState,
+                    positionMs = displayPosMs,
+                    primaryTextColor = primaryTextColor,
+                    secondaryTextColor = secondaryTextColor,
+                    modifier = Modifier.weight(1f),
+                )
 
                 // Main content area
                 Column(Modifier.fillMaxWidth()) {

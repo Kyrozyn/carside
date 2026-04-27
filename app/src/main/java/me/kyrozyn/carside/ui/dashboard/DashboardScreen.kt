@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.LocalGasStation
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,6 +65,7 @@ import me.kyrozyn.carside.ui.apps.InstalledAppsLoader
 import me.kyrozyn.carside.ui.apps.LaunchableApp
 import me.kyrozyn.carside.ui.internetradio.InternetRadioMiniPanel
 import me.kyrozyn.carside.ui.map.MapPane
+import me.kyrozyn.carside.ui.media.LyricsFullscreenScreen
 import me.kyrozyn.carside.ui.media.MediaPlayerPanel
 import me.kyrozyn.carside.ui.navigation.NavigationPanel
 import me.kyrozyn.carside.ui.status.UnifiedDashboardStatusBar
@@ -96,6 +98,8 @@ fun DashboardScreen(
     /** Unduhan peta offline aktif (background); banner tipis di atas peta. */
     offlineDownloadActive: ActiveOfflineDownload? = null,
     onOpenGarage: () -> Unit = {},
+    onOpenLyricsFullscreen: () -> Unit = {},
+    onCloseLyricsFullscreen: () -> Unit = {},
     hasOfflineMaps: Boolean = false,
     locationDotSize: Float = 60f,
     modifier: Modifier = Modifier,
@@ -197,6 +201,7 @@ fun DashboardScreen(
                             onNext = onNext,
                             onPrevious = onPrevious,
                             onSeekTo = onSeekTo,
+                            lyricsState = uiState.lyricsState,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -285,33 +290,59 @@ fun DashboardScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(
-                    onClick = onOpenGarage,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
-                ) {
-                    Icon(
-                        Icons.Default.LocalGasStation,
-                        contentDescription = "Garage — Trip & BBM",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(26.dp),
-                    )
+                    val hasLyrics = uiState.lyricsState is me.kyrozyn.carside.domain.model.LyricsState.Found
+                            || uiState.lyricsState is me.kyrozyn.carside.domain.model.LyricsState.Loading
+                    if (hasLyrics) {
+                        IconButton(
+                            onClick = onOpenLyricsFullscreen,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        ) {
+                            Icon(
+                                Icons.Default.MusicNote,
+                                contentDescription = "Lirik lagu",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(26.dp),
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = onOpenGarage,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                    ) {
+                        Icon(
+                            Icons.Default.LocalGasStation,
+                            contentDescription = "Garage — Trip & BBM",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(26.dp),
+                        )
+                    }
+                    IconButton(
+                        onClick = onOpenInternetRadio,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+                    ) {
+                        Icon(
+                            Icons.Default.Podcasts,
+                            contentDescription = "Radio Internet",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(26.dp),
+                        )
+                    }
                 }
-                IconButton(
-                    onClick = onOpenInternetRadio,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
-                ) {
-                    Icon(
-                        Icons.Default.Podcasts,
-                        contentDescription = "Radio Internet",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(26.dp),
-                    )
-                }
-            }
+        }
+
+        // Fullscreen lyrics overlay
+        if (uiState.lyricsFullscreenOpen) {
+            LyricsFullscreenScreen(
+                mediaState = uiState.media,
+                lyricsState = uiState.lyricsState,
+                onClose = onCloseLyricsFullscreen,
+            )
         }
     }
 

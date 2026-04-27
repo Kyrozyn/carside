@@ -19,11 +19,13 @@ import me.kyrozyn.carside.data.alert.SoftSpeedTonePlayer
 import me.kyrozyn.carside.data.settings.AppSettingsRepository
 import me.kyrozyn.carside.data.trip.RoomTripRepository
 import me.kyrozyn.carside.data.trip.TripTracker
+import me.kyrozyn.carside.data.lyrics.LyricsRepositoryImpl
 import me.kyrozyn.carside.data.weather.OpenMeteoWeatherRepository
 import me.kyrozyn.carside.domain.repository.CompassProvider
 import me.kyrozyn.carside.domain.repository.InternetRadioController
 import me.kyrozyn.carside.domain.repository.LocationProvider
 import me.kyrozyn.carside.domain.repository.FuelRepository
+import me.kyrozyn.carside.domain.repository.LyricsRepository
 import me.kyrozyn.carside.domain.repository.MapSession
 import me.kyrozyn.carside.domain.repository.MediaController
 import me.kyrozyn.carside.domain.repository.TripRepository
@@ -62,4 +64,6 @@ class AppContainer(context: Context) {
     )
 
     val fuelRepository: FuelRepository = RoomFuelRepository(database.fuelDao())
+
+    val lyricsRepository: LyricsRepository = LyricsRepositoryImpl()
 }

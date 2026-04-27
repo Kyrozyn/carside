@@ -281,6 +281,8 @@ class MainActivity : ComponentActivity() {
                         onSelectShortcutApp = vm::setShortcutPackage,
                         onOpenWeatherDetails = vm::openWeatherDetails,
                         onCloseWeatherDetails = vm::closeWeatherDetails,
+                        onOpenLyricsFullscreen = vm::openLyricsFullscreen,
+                        onCloseLyricsFullscreen = vm::closeLyricsFullscreen,
                         offlineDownloadActive = offlineDownloadActive,
                         hasOfflineMaps = hasOfflineMaps,
                         locationDotSize = locationDotSize,
