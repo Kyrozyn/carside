@@ -102,6 +102,7 @@ fun DashboardScreen(
     onCloseLyricsFullscreen: () -> Unit = {},
     hasOfflineMaps: Boolean = false,
     locationDotSize: Float = 60f,
+    locationRefreshIntervalMs: Long = 60_000L,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -167,6 +168,7 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxSize(),
                             useOfflineStyle = hasOfflineMaps,
                             locationDotSize = locationDotSize,
+                            locationRefreshIntervalMs = locationRefreshIntervalMs,
                         )
                     }
                 }

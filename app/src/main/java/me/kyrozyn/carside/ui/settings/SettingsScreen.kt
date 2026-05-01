@@ -241,6 +241,53 @@ fun SettingsScreen(
                 }
             }
 
+            // ── Interval refresh nama lokasi ──────────────────────────────
+            SettingsCardWithIcon(
+                icon = Icons.Outlined.LocationOn,
+                iconTint = MaterialTheme.colorScheme.tertiary,
+                iconBackground = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
+                title = "Interval Refresh Nama Lokasi",
+                description = "Atur seberapa sering nama jalan diperbarui di layar utama.",
+            ) {
+                val refreshIntervalMs by settingsRepository.locationRefreshIntervalMs.collectAsState()
+                val refreshSeconds = (refreshIntervalMs / 1000).toInt()
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "${refreshSeconds}d",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                    Slider(
+                        value = refreshSeconds.toFloat(),
+                        onValueChange = { seconds ->
+                            settingsRepository.setLocationRefreshIntervalMs(seconds.toLong() * 1000L)
+                        },
+                        valueRange = 30f..300f,
+                        steps = 27,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Text(
+                    text = "Setiap ${refreshSeconds} detik",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
             // ── Kelola download maps ────────────────────────────────────
             SettingsNavCard(
                 icon = Icons.Outlined.Map,

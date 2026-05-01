@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.kyrozyn.carside.domain.model.LyricsState
 import me.kyrozyn.carside.domain.model.SyncedLine
@@ -47,20 +48,16 @@ fun LyricsDisplay(
         is LyricsState.Found -> {
             val synced = lyricsState.syncedLines
             if (!synced.isNullOrEmpty()) {
-                SyncedLyricsView(
+                // Hanya tampilkan 1 baris lirik time-synced yang aktif
+                SingleLineSyncedLyricsView(
                     lines = synced,
                     positionMs = positionMs,
                     primaryTextColor = primaryTextColor,
-                    secondaryTextColor = secondaryTextColor,
-                    modifier = modifier,
-                )
-            } else if (!lyricsState.plainLyrics.isNullOrBlank()) {
-                PlainLyricsView(
-                    lyrics = lyricsState.plainLyrics,
-                    secondaryTextColor = secondaryTextColor,
                     modifier = modifier,
                 )
             } else {
+                // Jika lirik tidak time-synced (plain), jangan tampilkan di sini
+                // User bisa akses melalui halaman lirik full
                 Spacer(modifier)
             }
         }
@@ -112,6 +109,45 @@ private fun PlainLyricsView(
                 .padding(vertical = 8.dp),
             lineHeight = MaterialTheme.typography.bodyMedium.lineHeight,
         )
+    }
+}
+
+@Composable
+private fun SingleLineSyncedLyricsView(
+    lines: List<SyncedLine>,
+    positionMs: Long,
+    primaryTextColor: Color,
+    modifier: Modifier,
+) {
+    val activeIndex by remember(positionMs, lines) {
+        derivedStateOf {
+            var idx = 0
+            for (i in lines.indices) {
+                if (lines[i].timestampMs <= positionMs) idx = i else break
+            }
+            idx
+        }
+    }
+
+    val activeLine = lines.getOrNull(activeIndex)
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        if (activeLine != null) {
+            Text(
+                text = activeLine.text.ifBlank { "\u200B" },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = primaryTextColor,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

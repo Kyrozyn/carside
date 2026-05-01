@@ -196,6 +196,7 @@ fun MapPane(
     modifier: Modifier = Modifier,
     useOfflineStyle: Boolean = false,
     locationDotSize: Float = 60f,
+    locationRefreshIntervalMs: Long = 60_000L,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -299,7 +300,7 @@ fun MapPane(
                 r == null -> "Alamat tidak diketahui".truncateStreetLabel()
                 else -> r.fabParts.fabLabel()
             }
-            delay(STREET_GEOCODE_INTERVAL_MS)
+            delay(locationRefreshIntervalMs)
         }
     }
 

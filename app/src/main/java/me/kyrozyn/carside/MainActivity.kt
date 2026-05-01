@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
                 val offlineRegions by container.offlineMapsRepository.regions.collectAsStateWithLifecycle()
                 val speedWarningEnabled by container.settingsRepository.speedWarningEnabled.collectAsStateWithLifecycle()
                 val locationDotSize by container.settingsRepository.locationDotSize.collectAsStateWithLifecycle()
+                val locationRefreshIntervalMs by container.settingsRepository.locationRefreshIntervalMs.collectAsStateWithLifecycle()
                 val context = LocalContext.current
                 val lifecycleOwner = LocalLifecycleOwner.current
                 
@@ -286,6 +287,7 @@ class MainActivity : ComponentActivity() {
                         offlineDownloadActive = offlineDownloadActive,
                         hasOfflineMaps = hasOfflineMaps,
                         locationDotSize = locationDotSize,
+                        locationRefreshIntervalMs = locationRefreshIntervalMs,
                     )
                 }
             }

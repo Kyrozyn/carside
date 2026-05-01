@@ -39,6 +39,11 @@ class AppSettingsRepository(context: Context) {
     )
     val locationDotSize: StateFlow<Float> = _locationDotSize.asStateFlow()
 
+    private val _locationRefreshIntervalMs = MutableStateFlow(
+        prefs.getLong(KEY_LOCATION_REFRESH_INTERVAL_MS, DEFAULT_LOCATION_REFRESH_INTERVAL_MS)
+    )
+    val locationRefreshIntervalMs: StateFlow<Long> = _locationRefreshIntervalMs.asStateFlow()
+
     fun setUseGpsForwardMapBearing(enabled: Boolean) {
         if (_useGpsForwardMapBearing.value == enabled) return
         _useGpsForwardMapBearing.value = enabled
@@ -61,6 +66,12 @@ class AppSettingsRepository(context: Context) {
         if (_locationDotSize.value == size) return
         _locationDotSize.value = size
         prefs.edit().putFloat(KEY_LOCATION_DOT_SIZE, size).apply()
+    }
+
+    fun setLocationRefreshIntervalMs(intervalMs: Long) {
+        if (_locationRefreshIntervalMs.value == intervalMs) return
+        _locationRefreshIntervalMs.value = intervalMs
+        prefs.edit().putLong(KEY_LOCATION_REFRESH_INTERVAL_MS, intervalMs).apply()
     }
 
     fun setShortcutPackage(slot: Int, packageName: String?) {
@@ -169,5 +180,7 @@ class AppSettingsRepository(context: Context) {
         private const val KEY_SELECTED_PALETTE = "selected_palette"
         private const val KEY_LOCATION_DOT_SIZE = "location_dot_size"
         private const val DEFAULT_LOCATION_DOT_SIZE = 60f
+        private const val KEY_LOCATION_REFRESH_INTERVAL_MS = "location_refresh_interval_ms"
+        private const val DEFAULT_LOCATION_REFRESH_INTERVAL_MS = 60_000L
     }
 }
