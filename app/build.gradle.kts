@@ -37,6 +37,13 @@ android {
             }
         }
     }
+    
+    packaging {
+        jniLibs {
+            // Menyimpan simbol debug untuk library native
+            keepDebugSymbols += listOf("**/*.so")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
