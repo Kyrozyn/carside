@@ -639,7 +639,7 @@ private fun MapLayerSwitchButton(currentStyle: MapStyle, onClick: () -> Unit) {
     }
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(32.dp))
             .background(
                 if (isGoogle) MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
                 else MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
@@ -681,7 +681,7 @@ private fun MapControlButton(
     Box(
         modifier = Modifier
             .size(44.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(32.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
         contentAlignment = Alignment.Center,
     ) {

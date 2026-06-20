@@ -159,7 +159,7 @@ fun GarageScreen(
                         onClick = onBack,
                         modifier = Modifier
                             .size(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
@@ -188,7 +188,7 @@ fun GarageScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(32.dp),
             ) {
                 Text("ℹ️", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.width(10.dp))
@@ -286,7 +286,7 @@ private fun ActiveTripBanner(
     }
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(32.dp),
         shadowElevation = 6.dp,
         color = MaterialTheme.colorScheme.tertiaryContainer,
     ) {
@@ -341,7 +341,7 @@ private fun ActiveTripBanner(
                     onClick = onStopTrip,
                     modifier = Modifier
                         .height(40.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(32.dp))
                         .background(MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.12f)),
                 ) {
                     Text(
@@ -462,7 +462,7 @@ private fun TripListPane(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(32.dp))
                     .clickable { onTripClick(trip.id) },
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(
@@ -518,7 +518,7 @@ private fun TripListPane(
                     IconButton(
                         onClick = { onDeleteTrip(trip.id) },
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)),
                     ) {
                         Icon(
@@ -536,7 +536,7 @@ private fun TripListPane(
 @Composable
 private fun StatChip(emoji: String, caption: String, value: String) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
     ) {
         Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
@@ -737,7 +737,7 @@ private fun FuelPane(
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(32.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                     ) {
                         Column(
@@ -769,7 +769,7 @@ private fun FuelPane(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(32.dp))
                         .clickable { onEdit(e) },
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     colors = CardDefaults.cardColors(
@@ -819,7 +819,7 @@ private fun FuelPane(
                             if (e.isFullTank) {
                                 Spacer(Modifier.height(4.dp))
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = RoundedCornerShape(32.dp),
                                     color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
                                 ) {
                                     Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
@@ -844,7 +844,7 @@ private fun FuelPane(
                             IconButton(
                                 onClick = { onDelete(e.id) },
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(32.dp))
                                     .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)),
                             ) {
                                 Icon(
@@ -877,7 +877,7 @@ private fun FuelPane(
 private fun EconomySummaryCard(economy: FuelEconomySummary) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(32.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
         ),

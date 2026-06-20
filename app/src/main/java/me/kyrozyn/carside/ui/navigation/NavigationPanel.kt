@@ -121,7 +121,7 @@ fun NavigationPanel(
                         state.roadText?.let { road ->
                             Spacer(Modifier.height(8.dp))
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(32.dp),
                                 color = colors.surfaceVariant.copy(alpha = 0.6f),
                             ) {
                                 Text(
@@ -246,9 +246,9 @@ private fun ManeuverIconTile(
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        modifier = modifier.shadow(8.dp, RoundedCornerShape(24.dp)),
+        modifier = modifier.shadow(8.dp, RoundedCornerShape(32.dp)),
         color = colors.surfaceVariant,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(32.dp),
         tonalElevation = 4.dp,
     ) {
         Column(
@@ -261,7 +261,7 @@ private fun ManeuverIconTile(
             Box(
                 modifier = Modifier
                     .size(160.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(32.dp))
                     .background(colors.surface),
                 contentAlignment = Alignment.Center,
             ) {
@@ -310,7 +310,7 @@ private fun EtaFooter(etaText: String) {
     Surface(
         color = colors.tertiaryContainer,
         contentColor = colors.onTertiaryContainer,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(32.dp),
         shadowElevation = 2.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {

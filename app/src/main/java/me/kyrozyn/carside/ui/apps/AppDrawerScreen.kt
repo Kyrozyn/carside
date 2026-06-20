@@ -119,7 +119,7 @@ fun AppDrawerScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 placeholder = { Text("Cari aplikasi…") },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(32.dp),
             )
 
             LazyVerticalGrid(
@@ -157,7 +157,7 @@ private fun AppGridItem(
 
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(32.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 12.dp),
@@ -173,7 +173,7 @@ private fun AppGridItem(
                     contentDescription = null,
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(10.dp)),
+                        .clip(RoundedCornerShape(32.dp)),
                 )
             } else {
                 Icon(

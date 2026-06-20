@@ -144,7 +144,7 @@ fun MediaPlayerPanel(
                             .fillMaxWidth()
                             .padding(bottom = 10.dp)
                             .clickable { onOpenNotificationAccessSettings() },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(32.dp),
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.93f),
                         shadowElevation = 4.dp,
                         tonalElevation = 2.dp,
@@ -167,7 +167,7 @@ fun MediaPlayerPanel(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(top = 10.dp),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(32.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.error,
                                     contentColor = MaterialTheme.colorScheme.onError,

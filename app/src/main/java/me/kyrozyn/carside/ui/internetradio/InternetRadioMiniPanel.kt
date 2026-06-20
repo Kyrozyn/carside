@@ -103,7 +103,7 @@ fun InternetRadioMiniPanel(
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(32.dp))
                                 .background(Color.White.copy(alpha = 0.1f)),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -126,7 +126,7 @@ fun InternetRadioMiniPanel(
                         onClick = onOpenInternetRadio,
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(Color.White.copy(alpha = 0.1f)),
                     ) {
                         Icon(
@@ -144,7 +144,7 @@ fun InternetRadioMiniPanel(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(32.dp))
                         .background(Color.White.copy(alpha = 0.07f))
                         .clickable(onClick = onOpenInternetRadio)
                         .padding(12.dp),
@@ -154,8 +154,8 @@ fun InternetRadioMiniPanel(
                     Box(
                         modifier = Modifier
                             .size(64.dp)
-                            .shadow(4.dp, RoundedCornerShape(12.dp))
-                            .clip(RoundedCornerShape(12.dp))
+                            .shadow(4.dp, RoundedCornerShape(32.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(Color.White.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -272,7 +272,7 @@ fun InternetRadioMiniPanel(
                     Box(
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(Color.White.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center,
                     ) {

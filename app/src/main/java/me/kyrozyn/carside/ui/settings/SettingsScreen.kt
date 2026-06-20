@@ -130,7 +130,7 @@ fun SettingsScreen(
                 OutlinedButton(
                     onClick = onOpenLauncherSettings,
                     modifier = Modifier.padding(top = 12.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(32.dp),
                 ) {
                     Text("Buka pengaturan launcher")
                 }
@@ -143,7 +143,7 @@ fun SettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(32.dp),
             ) {
                 Row(
                     modifier = Modifier
@@ -155,7 +155,7 @@ fun SettingsScreen(
                     Box(
                         modifier = Modifier
                             .size(40.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -195,7 +195,7 @@ fun SettingsScreen(
                         OutlinedButton(
                             onClick = onTestSpeedWarningSound,
                             modifier = Modifier.padding(top = 12.dp),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(32.dp),
                         ) {
                             Text("Tes suara peringatan")
                         }
@@ -221,7 +221,7 @@ fun SettingsScreen(
                     Box(
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -260,7 +260,7 @@ fun SettingsScreen(
                     Box(
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -327,7 +327,7 @@ private fun SettingsCardWithIcon(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(32.dp),
     ) {
         Row(
             modifier = Modifier
@@ -339,7 +339,7 @@ private fun SettingsCardWithIcon(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(32.dp))
                     .background(iconBackground),
                 contentAlignment = Alignment.Center,
             ) {
@@ -385,7 +385,7 @@ private fun SettingsNavCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(32.dp),
     ) {
         Row(
             modifier = Modifier
@@ -397,7 +397,7 @@ private fun SettingsNavCard(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(32.dp))
                     .background(iconBackground),
                 contentAlignment = Alignment.Center,
             ) {
@@ -449,7 +449,7 @@ private fun ThemePaletteCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(32.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -459,7 +459,7 @@ private fun ThemePaletteCard(
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(32.dp))
                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -559,12 +559,12 @@ private fun PaletteRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(32.dp))
             .background(backgroundColor)
             .border(
                 width = if (isSelected) 1.5.dp else 0.dp,
                 color = borderColor,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(32.dp),
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
