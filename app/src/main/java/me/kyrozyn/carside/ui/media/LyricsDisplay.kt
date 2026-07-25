@@ -1,11 +1,16 @@
 package me.kyrozyn.carside.ui.media
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -29,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.kyrozyn.carside.domain.model.LyricsState
@@ -121,32 +127,53 @@ private fun SingleLineSyncedLyricsView(
 ) {
     val activeIndex by remember(positionMs, lines) {
         derivedStateOf {
-            var idx = 0
+            var idx = -1
             for (i in lines.indices) {
-                if (lines[i].timestampMs <= positionMs) idx = i else break
+                if (lines[i].timestampMs <= positionMs) {
+                    idx = i
+                } else {
+                    break
+                }
             }
             idx
         }
     }
 
-    val activeLine = lines.getOrNull(activeIndex)
+    val activeLineText = remember(activeIndex, lines) {
+        if (activeIndex in lines.indices) {
+            lines[activeIndex].text.trim()
+        } else {
+            ""
+        }
+    }
 
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
-        if (activeLine != null) {
-            Text(
-                text = activeLine.text.ifBlank { "\u200B" },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = primaryTextColor,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+        AnimatedContent(
+            targetState = activeLineText,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+            },
+            label = "singleLineLyricAnim",
+        ) { text ->
+            if (text.isNotBlank()) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = primaryTextColor.copy(alpha = 0.95f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            } else {
+                Spacer(Modifier.height(32.dp))
+            }
         }
     }
 }
