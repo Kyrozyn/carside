@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,6 +53,7 @@ private fun formatSizeMb(bytes: Long): String =
 fun OfflineMapsScreen(
     container: AppContainer,
     onBack: () -> Unit,
+    onHome: () -> Unit = onBack,
     onNavigateToAdd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -70,6 +72,15 @@ fun OfflineMapsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onHome) {
+                        Icon(
+                            Icons.Outlined.Home,
+                            contentDescription = "Layar Utama / Home",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
                     }
                 },
             )

@@ -72,12 +72,15 @@ import me.kyrozyn.carside.domain.model.InternetRadioState
 import me.kyrozyn.carside.domain.model.InternetStation
 import me.kyrozyn.carside.domain.model.SortOrder
 
+import androidx.compose.material.icons.outlined.Home
+
 private enum class ListTab { ALL, FAVORITES }
 
 @Composable
 fun InternetRadioScreen(
     container: AppContainer,
     onBack: () -> Unit,
+    onHome: () -> Unit = onBack,
     modifier: Modifier = Modifier,
 ) {
     val vm: InternetRadioViewModel = viewModel(factory = InternetRadioViewModel.factory(container))
@@ -91,7 +94,7 @@ fun InternetRadioScreen(
         color = MaterialTheme.colorScheme.background,
     ) {
         Column(Modifier.fillMaxSize()) {
-            Header(state = state, onBack = onBack, onRefresh = vm::refresh)
+            Header(state = state, onBack = onBack, onHome = onHome, onRefresh = vm::refresh)
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
             Row(
@@ -138,6 +141,7 @@ fun InternetRadioScreen(
 private fun Header(
     state: InternetRadioState,
     onBack: () -> Unit,
+    onHome: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     Row(
@@ -175,6 +179,13 @@ private fun Header(
                 Icons.Default.Refresh,
                 contentDescription = "Segarkan",
                 tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        IconButton(onClick = onHome) {
+            Icon(
+                Icons.Outlined.Home,
+                contentDescription = "Layar Utama / Home",
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
     }

@@ -331,6 +331,13 @@ class DashboardViewModel(
         _lyricsFullscreenOpen.value = false
     }
 
+    fun resetOverlays() {
+        _browseOpen.value = false
+        _shortcutPickerSlot.value = null
+        _weatherDetailsOpen.value = false
+        _lyricsFullscreenOpen.value = false
+    }
+
     fun onPlayPause() {
         val playing = container.mediaController.playbackState.value.isPlaying
         if (playing) container.mediaController.pause() else container.mediaController.play()

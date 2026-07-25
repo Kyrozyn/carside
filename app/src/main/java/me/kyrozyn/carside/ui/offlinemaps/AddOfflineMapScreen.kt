@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -57,6 +58,7 @@ private fun formatSizeMb(bytes: Long): String =
 fun AddOfflineMapScreen(
     container: AppContainer,
     onBack: () -> Unit,
+    onHome: () -> Unit = onBack,
     modifier: Modifier = Modifier,
 ) {
     val vm: OfflineMapsViewModel = viewModel(factory = OfflineMapsViewModel.factory(container))
@@ -86,6 +88,15 @@ fun AddOfflineMapScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onHome) {
+                        Icon(
+                            Icons.Outlined.Home,
+                            contentDescription = "Layar Utama / Home",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
                     }
                 },
             )

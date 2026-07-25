@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -81,6 +82,7 @@ private val dateFmt: DateTimeFormatter =
 fun GarageScreen(
     container: AppContainer,
     onBack: () -> Unit,
+    onHome: () -> Unit = onBack,
     modifier: Modifier = Modifier,
 ) {
     val vm: GarageViewModel = viewModel(factory = GarageViewModel.factory(container))
@@ -163,6 +165,21 @@ fun GarageScreen(
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = onHome,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                    ) {
+                        Icon(
+                            Icons.Outlined.Home,
+                            contentDescription = "Layar Utama / Home",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

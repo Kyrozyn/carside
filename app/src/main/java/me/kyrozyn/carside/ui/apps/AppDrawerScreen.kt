@@ -49,9 +49,12 @@ import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import androidx.compose.material.icons.outlined.Home
+
 @Composable
 fun AppDrawerScreen(
     onBack: () -> Unit,
+    onHome: () -> Unit = onBack,
     onLaunchApp: (packageName: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -107,6 +110,14 @@ fun AppDrawerScreen(
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onHome) {
+                    Icon(
+                        Icons.Outlined.Home,
+                        contentDescription = "Layar Utama / Home",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))

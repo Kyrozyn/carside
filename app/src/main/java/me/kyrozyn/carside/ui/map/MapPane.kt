@@ -1,4 +1,4 @@
-﻿package me.kyrozyn.carside.ui.map
+package me.kyrozyn.carside.ui.map
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -70,9 +70,19 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.PropertyFactory.circleColor
+import org.maplibre.android.style.layers.PropertyFactory.circleOpacity
+import org.maplibre.android.style.layers.PropertyFactory.circlePitchAlignment
+import org.maplibre.android.style.layers.PropertyFactory.circleRadius
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
 import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconKeepUpright
+import org.maplibre.android.style.layers.PropertyFactory.iconOptional
+import org.maplibre.android.style.layers.PropertyFactory.iconPitchAlignment
 import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
 import org.maplibre.android.style.layers.PropertyFactory.iconSize
 import org.maplibre.android.style.layers.PropertyFactory.rasterOpacity
@@ -88,8 +98,11 @@ import org.maplibre.geojson.Point
 private const val STREET_GEOCODE_INTERVAL_MS = 60_000L
 
 private const val FOLLOW_ZOOM = 17.0
+private const val CAMERA_TILT = 35.0
+private const val TOP_PADDING_RATIO = 0.42f
 private const val LOCATION_SOURCE_ID = "location-source"
 private const val LOCATION_LAYER_ID = "location-layer"
+private const val LOCATION_CIRCLE_LAYER_ID = "location-circle-layer"
 private const val LOCATION_ICON_ID = "location-dot"
 private const val OSM_TRAFFIC_SOURCE_ID = "osm-google-traffic-source"
 private const val OSM_TRAFFIC_LAYER_ID = "osm-google-traffic-layer"
@@ -184,6 +197,7 @@ private class MapState {
      * kamera sudah diatur dari onClick tombol lokasi.
      */
     var skipCameraApplyLocation: Boolean = false
+    var lastCameraBearing: Double? = null
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -216,7 +230,17 @@ fun MapPane(
     val latestLocationForFab by rememberUpdatedState(userLocation)
     val latestPermissionForFab by rememberUpdatedState(hasLocationPermission)
 
-    val mapView = remember(context) { MapView(context) }
+    val mapView = remember(context) {
+        MapView(context).apply {
+            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                val h = v.height
+                if (h > 0) {
+                    val topPadding = (h * TOP_PADDING_RATIO).toInt()
+                    mapState.map?.setPadding(0, topPadding, 0, 0)
+                }
+            }
+        }
+    }
 
     val locationDotBitmap = remember(locationDotSize) {
         locationDotBitmap(locationDotSize.toInt())
@@ -250,6 +274,11 @@ fun MapPane(
                 isCompassEnabled = false
                 isLogoEnabled = false
                 isAttributionEnabled = false
+            }
+            val h = mapView.height
+            if (h > 0) {
+                val topPadding = (h * TOP_PADDING_RATIO).toInt()
+                map.setPadding(0, topPadding, 0, 0)
             }
             loadMapStyle(map, mapStyle, mapState, context, useOfflineStyle, locationDotBitmap)
         }
@@ -475,6 +504,7 @@ fun MapPane(
                                     CameraPosition.Builder()
                                         .target(LatLng(loc.latitude, loc.longitude))
                                         .zoom(FOLLOW_ZOOM)
+                                        .tilt(CAMERA_TILT)
                                         .build(),
                                 ),
                             )
@@ -532,9 +562,10 @@ private fun loadMapStyle(
 
         // Remove old layer and source if they exist
         loadedStyle.getLayer(LOCATION_LAYER_ID)?.let { loadedStyle.removeLayer(it) }
+        loadedStyle.getLayer(LOCATION_CIRCLE_LAYER_ID)?.let { loadedStyle.removeLayer(it) }
         loadedStyle.getSource(LOCATION_SOURCE_ID)?.let { loadedStyle.removeSource(it) }
 
-        // Always recreate location source and layer
+        // Always recreate location source and layers
         val locationSource = GeoJsonSource(LOCATION_SOURCE_ID)
         loadedStyle.addSource(locationSource)
 
@@ -548,17 +579,30 @@ private fun loadMapStyle(
             MapStyle.OSM_GOOGLE_TRAFFIC_DARK,
             -> true
         }
-        loadedStyle.addLayer(
-            SymbolLayer(LOCATION_LAYER_ID, LOCATION_SOURCE_ID).withProperties(
-                iconImage(LOCATION_ICON_ID),
-                iconSize(locationDotScale),
-                iconAllowOverlap(true),
-                iconIgnorePlacement(true),
-                iconRotationAlignment(
-                    if (useMapRotation) "map" else "viewport",
-                ),
-                ),
-            )
+
+        // Layer 1: Vector CircleLayer (GPU native fallback, anti-hilang)
+        val circleLayer = CircleLayer(LOCATION_CIRCLE_LAYER_ID, LOCATION_SOURCE_ID).withProperties(
+            circleColor("#4285F4"),
+            circleRadius(13f),
+            circleStrokeColor("#FFFFFF"),
+            circleStrokeWidth(3f),
+            circleOpacity(0.40f),
+            circlePitchAlignment("map"),
+        )
+        loadedStyle.addLayer(circleLayer)
+
+        // Layer 2: SymbolLayer (ikonic blue dot + halo)
+        val symbolLayer = SymbolLayer(LOCATION_LAYER_ID, LOCATION_SOURCE_ID).withProperties(
+            iconImage(LOCATION_ICON_ID),
+            iconSize(locationDotScale),
+            iconAllowOverlap(true),
+            iconIgnorePlacement(true),
+            iconOptional(false),
+            iconKeepUpright(false),
+            iconRotationAlignment(if (useMapRotation) "map" else "viewport"),
+            iconPitchAlignment(if (useMapRotation) "map" else "viewport"),
+        )
+        loadedStyle.addLayer(symbolLayer)
 
         mapState.styleLoaded = true
         applyLocationAndBearing(map, mapState, style)
@@ -592,7 +636,7 @@ private fun applyLocationAndBearing(
     }
 
     // Kamera: mode vector OSM ikut kompas; Google north-up
-    val cameraBearing = when (mode) {
+    val rawCameraBearing = when (mode) {
         MapStyle.GOOGLE,
         MapStyle.GOOGLE_DARK,
         -> 0.0
@@ -603,17 +647,42 @@ private fun applyLocationAndBearing(
         -> bearing.toDouble()
     }
 
+    val cameraBearing = if (mode == MapStyle.GOOGLE || mode == MapStyle.GOOGLE_DARK) {
+        0.0
+    } else {
+        val last = mapState.lastCameraBearing
+        if (last != null) {
+            var diff = (rawCameraBearing - last) % 360.0
+            if (diff > 180.0) diff -= 360.0
+            if (diff < -180.0) diff += 360.0
+            // Haluskan rotasi: abaikan jitter kompas < 1.5 derajat saat kendaraan pelan agar peta tidak goyang
+            if (kotlin.math.abs(diff) < 1.5 && (loc.speedMps ?: 0f) < 2.5f) {
+                last
+            } else {
+                mapState.lastCameraBearing = rawCameraBearing
+                rawCameraBearing
+            }
+        } else {
+            mapState.lastCameraBearing = rawCameraBearing
+            rawCameraBearing
+        }
+    }
+
     val target = LatLng(loc.latitude, loc.longitude)
-    val cameraBuilder = CameraPosition.Builder().target(target).bearing(cameraBearing)
+    val cameraBuilder = CameraPosition.Builder()
+        .target(target)
+        .bearing(cameraBearing)
+        .tilt(CAMERA_TILT)
 
     if (!mapState.didInitialZoom) {
         cameraBuilder.zoom(FOLLOW_ZOOM)
         mapState.didInitialZoom = true
         map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()))
     } else {
-        map.animateCamera(
-            CameraUpdateFactory.newCameraPosition(cameraBuilder.zoom(map.cameraPosition.zoom).build()),
-            300,
+        val currentZoom = map.cameraPosition.zoom.coerceAtLeast(10.0)
+        map.easeCamera(
+            CameraUpdateFactory.newCameraPosition(cameraBuilder.zoom(currentZoom).build()),
+            800,
         )
     }
 }

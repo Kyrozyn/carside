@@ -64,6 +64,7 @@ import me.kyrozyn.carside.ui.theme.AppThemePalette
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onHome: () -> Unit = onBack,
     onKelolaDownloadMaps: () -> Unit,
     onOpenLauncherSettings: () -> Unit,
     onOpenPrivacyPolicy: () -> Unit,
@@ -90,6 +91,15 @@ fun SettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onHome) {
+                        Icon(
+                            Icons.Outlined.Home,
+                            contentDescription = "Layar Utama / Home",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

@@ -46,6 +46,14 @@ import me.kyrozyn.carside.ui.theme.CarsideTheme
 
 class MainActivity : ComponentActivity() {
 
+    private var resetToHomeAction: (() -> Unit)? = null
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        resetToHomeAction?.invoke()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -84,6 +92,17 @@ class MainActivity : ComponentActivity() {
                 var showSettings by remember { mutableStateOf(false) }
                 var settingsOfflineMaps by remember { mutableStateOf(false) }
                 var settingsOfflineMapAdd by remember { mutableStateOf(false) }
+
+                val resetToHome = {
+                    showAppDrawer = false
+                    showInternetRadio = false
+                    showGarage = false
+                    showSettings = false
+                    settingsOfflineMaps = false
+                    settingsOfflineMapAdd = false
+                    vm.resetOverlays()
+                }
+                resetToHomeAction = resetToHome
 
                 DisposableEffect(lifecycleOwner) {
                     val syncAccess: () -> Unit = {
@@ -171,6 +190,7 @@ class MainActivity : ComponentActivity() {
                 if (showAppDrawer) {
                     AppDrawerScreen(
                         onBack = { showAppDrawer = false },
+                        onHome = resetToHome,
                         onLaunchApp = { packageName ->
                             packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
                                 launchIntent.addFlags(
@@ -185,11 +205,13 @@ class MainActivity : ComponentActivity() {
                     InternetRadioScreen(
                         container = container,
                         onBack = { showInternetRadio = false },
+                        onHome = resetToHome,
                     )
                 } else if (showGarage) {
                     GarageScreen(
                         container = container,
                         onBack = { showGarage = false },
+                        onHome = resetToHome,
                     )
                 } else if (showSettings) {
                     if (settingsOfflineMaps) {
@@ -197,6 +219,7 @@ class MainActivity : ComponentActivity() {
                             AddOfflineMapScreen(
                                 container = container,
                                 onBack = { settingsOfflineMapAdd = false },
+                                onHome = resetToHome,
                             )
                         } else {
                             OfflineMapsScreen(
@@ -205,6 +228,7 @@ class MainActivity : ComponentActivity() {
                                     settingsOfflineMaps = false
                                     settingsOfflineMapAdd = false
                                 },
+                                onHome = resetToHome,
                                 onNavigateToAdd = { settingsOfflineMapAdd = true },
                             )
                         }
@@ -215,6 +239,7 @@ class MainActivity : ComponentActivity() {
                                 settingsOfflineMaps = false
                                 settingsOfflineMapAdd = false
                             },
+                            onHome = resetToHome,
                             onKelolaDownloadMaps = { settingsOfflineMaps = true },
                             onOpenLauncherSettings = {
                                 val homeIntent = Intent(Settings.ACTION_HOME_SETTINGS)

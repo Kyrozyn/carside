@@ -36,8 +36,8 @@ class FusedLocationDataSource(context: Context) : LocationProvider {
             }
         }
 
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3_000L)
-            .setMinUpdateIntervalMillis(2_000L)
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
+            .setMinUpdateIntervalMillis(500L)
             .setWaitForAccurateLocation(false)
             .build()
 
