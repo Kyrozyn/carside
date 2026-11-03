@@ -25,6 +25,26 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val keystoreEnv = project.findProperty("KEYSTORE_FILE") as? String ?: System.getenv("KEYSTORE_FILE")
+            val storeFileObj = if (!keystoreEnv.isNullOrBlank()) file(keystoreEnv) else rootProject.file("carside.jks")
+            val storePasswordProp = project.findProperty("KEYSTORE_PASSWORD") as? String ?: System.getenv("KEYSTORE_PASSWORD")
+            val keyAliasProp = project.findProperty("KEY_ALIAS") as? String ?: System.getenv("KEY_ALIAS")
+            val keyPasswordProp = project.findProperty("KEY_PASSWORD") as? String ?: System.getenv("KEY_PASSWORD")
+
+            if (!storePasswordProp.isNullOrBlank() && !keyAliasProp.isNullOrBlank() && !keyPasswordProp.isNullOrBlank() && storeFileObj.exists()) {
+                storeFile = storeFileObj
+                storePassword = storePasswordProp
+                keyAlias = keyAliasProp
+                keyPassword = keyPasswordProp
+            } else {
+                // Fallback ke debug key agar APK release tetap ter-sign dan bisa langsung diinstall
+                initWith(getByName("debug"))
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -35,6 +55,7 @@ android {
             ndk {
                 debugSymbolLevel = "FULL"
             }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     
