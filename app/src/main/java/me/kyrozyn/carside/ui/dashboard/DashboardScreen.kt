@@ -223,7 +223,7 @@ fun DashboardScreen(
                     .align(Alignment.TopCenter)
                     .fillMaxWidth(0.88f)
                     .padding(top = 8.dp),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(32.dp),
                 tonalElevation = 4.dp,
                 shadowElevation = 2.dp,
             ) {
@@ -258,7 +258,7 @@ fun DashboardScreen(
             IconButton(
                 onClick = onOpenAppDrawer,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(32.dp))
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
             ) {
                 Icon(
@@ -271,7 +271,7 @@ fun DashboardScreen(
             IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(32.dp))
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
             ) {
                 Icon(
@@ -298,7 +298,7 @@ fun DashboardScreen(
                         IconButton(
                             onClick = onOpenLyricsFullscreen,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(32.dp))
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                         ) {
                             Icon(
@@ -312,7 +312,7 @@ fun DashboardScreen(
                     IconButton(
                         onClick = onOpenGarage,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
                     ) {
                         Icon(
@@ -325,7 +325,7 @@ fun DashboardScreen(
                     IconButton(
                         onClick = onOpenInternetRadio,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
                     ) {
                         Icon(
@@ -621,7 +621,7 @@ private fun MetricSparkline(
     val chartColor = MaterialTheme.colorScheme.primary
     val baselineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
         tonalElevation = 1.dp,
         modifier = Modifier.fillMaxWidth(),
@@ -716,7 +716,7 @@ private fun InfoCard(
 ) {
     val resolvedValueColor = valueColor ?: MaterialTheme.colorScheme.onSurface
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
         tonalElevation = 1.dp,
         modifier = Modifier.fillMaxWidth(),
@@ -786,7 +786,7 @@ private fun ShortcutPickerSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(32.dp))
                         .clickable { onSelect(app.packageName) },
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
                 ) {

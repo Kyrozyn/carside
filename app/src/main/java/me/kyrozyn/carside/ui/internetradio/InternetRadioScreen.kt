@@ -361,7 +361,7 @@ private fun StationRow(
     onFavoriteClick: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(32.dp),
         color = if (isPlaying) {
             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
         } else {
@@ -369,7 +369,7 @@ private fun StationRow(
         },
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(32.dp))
             .combinedClickable(onClick = onPlay, onLongClick = onLongClick),
     ) {
         Row(
@@ -424,7 +424,7 @@ private fun StationFavicon(url: String?, size: androidx.compose.ui.unit.Dp) {
     Box(
         modifier = Modifier
             .size(size)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(32.dp))
             .background(MaterialTheme.colorScheme.surface),
         contentAlignment = Alignment.Center,
     ) {
@@ -455,7 +455,7 @@ private fun NowPlayingPanel(
     onToggleFavorite: (InternetStation) -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
         modifier = Modifier.fillMaxSize(),
     ) {

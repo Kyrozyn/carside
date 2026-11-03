@@ -196,7 +196,7 @@ private fun StatusBarVerticalDivider() {
 private fun ClockStatusPill(clockText: String) {
     Surface(
         modifier = Modifier.wrapContentWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             width = 1.dp,
@@ -267,7 +267,7 @@ private fun ShortcutItem(
     }
 
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
         modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),

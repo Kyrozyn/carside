@@ -137,7 +137,7 @@ fun LyricsFullscreenScreen(
                         albumArtUri = albumArtUri,
                         modifier = Modifier
                             .size(44.dp)
-                            .clip(RoundedCornerShape(8.dp)),
+                            .clip(RoundedCornerShape(32.dp)),
                     )
 
                     Spacer(Modifier.width(12.dp))
@@ -227,7 +227,7 @@ private fun AlbumArtPlaceholder(modifier: Modifier) {
     Box(
         modifier = modifier.background(
             MaterialTheme.colorScheme.surfaceVariant,
-            RoundedCornerShape(8.dp),
+            RoundedCornerShape(32.dp),
         ),
         contentAlignment = Alignment.Center,
     ) {
