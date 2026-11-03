@@ -28,7 +28,12 @@ android {
     signingConfigs {
         create("release") {
             val keystoreEnv = project.findProperty("KEYSTORE_FILE") as? String ?: System.getenv("KEYSTORE_FILE")
-            val storeFileObj = if (!keystoreEnv.isNullOrBlank()) file(keystoreEnv) else rootProject.file("carside.jks")
+            val storeFileObj = if (!keystoreEnv.isNullOrBlank()) {
+                val f = file(keystoreEnv)
+                if (f.exists()) f else rootProject.file(keystoreEnv)
+            } else {
+                rootProject.file("carside.jks")
+            }
             val storePasswordProp = project.findProperty("KEYSTORE_PASSWORD") as? String ?: System.getenv("KEYSTORE_PASSWORD")
             val keyAliasProp = project.findProperty("KEY_ALIAS") as? String ?: System.getenv("KEY_ALIAS")
             val keyPasswordProp = project.findProperty("KEY_PASSWORD") as? String ?: System.getenv("KEY_PASSWORD")
@@ -39,8 +44,33 @@ android {
                 keyAlias = keyAliasProp
                 keyPassword = keyPasswordProp
             } else {
-                // Fallback ke debug key agar APK release tetap ter-sign dan bisa langsung diinstall
-                initWith(getByName("debug"))
+                // Pastikan file debug.keystore ada secara fisik sebelum release signing divalidasi oleh Gradle
+                val debugKeystore = File(System.getProperty("user.home"), ".android/debug.keystore")
+                if (!debugKeystore.exists()) {
+                    debugKeystore.parentFile?.mkdirs()
+                    try {
+                        ProcessBuilder(
+                            "keytool", "-genkey", "-v",
+                            "-keystore", debugKeystore.absolutePath,
+                            "-alias", "androiddebugkey",
+                            "-storepass", "android",
+                            "-keypass", "android",
+                            "-keyalg", "RSA",
+                            "-keysize", "2048",
+                            "-validity", "10000",
+                            "-dname", "CN=Android Debug,O=Android,C=US"
+                        ).inheritIO().start().waitFor()
+                    } catch (_: Exception) {}
+                }
+
+                if (debugKeystore.exists()) {
+                    storeFile = debugKeystore
+                    storePassword = "android"
+                    keyAlias = "androiddebugkey"
+                    keyPassword = "android"
+                } else {
+                    initWith(getByName("debug"))
+                }
             }
         }
     }
