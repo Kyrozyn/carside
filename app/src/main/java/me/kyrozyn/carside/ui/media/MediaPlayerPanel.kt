@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BluetoothAudio
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
@@ -88,6 +89,7 @@ fun MediaPlayerPanel(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeekTo: (Long) -> Unit,
+    onOpenBluetoothMusic: () -> Unit = {},
     lyricsState: LyricsState = LyricsState.Idle,
     modifier: Modifier = Modifier,
 ) {
@@ -179,11 +181,37 @@ fun MediaPlayerPanel(
                     }
                 }
 
-                // Settings button — top right, 48dp touch target
+                // Top action buttons — Bluetooth Music & Settings
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isDarkTheme) Color.White.copy(alpha = 0.08f)
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        IconButton(
+                            onClick = onOpenBluetoothMusic,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Icon(
+                                Icons.Default.BluetoothAudio,
+                                contentDescription = "Buka Musik Bluetooth",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp),
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
                     Box(
                         modifier = Modifier
                             .size(48.dp)
@@ -352,23 +380,55 @@ fun MediaPlayerPanel(
                             )
                         }
                     } else {
-                        Text(
-                            text = state.track.title,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = primaryTextColor,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = state.track.artist,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = secondaryTextColor,
-                        )
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { onOpenBluetoothMusic() },
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(16.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Default.BluetoothAudio,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(26.dp),
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Musik Bluetooth",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = primaryTextColor,
+                                    )
+                                    Text(
+                                        text = "Buka pemutar Bluetooth bawaan agar suara HP keluar ke speaker",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = secondaryTextColor,
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     Spacer(Modifier.height(18.dp))
 
-                    val canToggle = state.hasActiveSession && (state.canPlay || state.canPause)
+                    val canToggle = true
 
                     // Playback controls row
                     Row(
@@ -400,21 +460,24 @@ fun MediaPlayerPanel(
                                 .size(72.dp)
                                 .scale(playScale)
                                 .shadow(
-                                    elevation = if (canToggle) 12.dp else 0.dp,
+                                    elevation = 12.dp,
                                     shape = CircleShape,
                                     ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
                                     spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
                                 )
                                 .clip(CircleShape)
-                                .background(
-                                    if (canToggle) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
-                                ),
+                                .background(MaterialTheme.colorScheme.primary),
                             contentAlignment = Alignment.Center,
                         ) {
                             IconButton(
-                                onClick = onPlayPause,
-                                enabled = canToggle,
+                                onClick = {
+                                    if (state.hasActiveSession) {
+                                        onPlayPause()
+                                    } else {
+                                        onOpenBluetoothMusic()
+                                    }
+                                },
+                                enabled = true,
                                 modifier = Modifier.fillMaxSize(),
                                 interactionSource = playPressSource,
                             ) {
@@ -428,8 +491,7 @@ fun MediaPlayerPanel(
                                             Icons.Default.Pause,
                                             contentDescription = "Jeda",
                                             modifier = Modifier.size(38.dp),
-                                            tint = if (canToggle) MaterialTheme.colorScheme.onPrimary
-                                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                            tint = MaterialTheme.colorScheme.onPrimary,
                                         )
                                     }
                                     androidx.compose.animation.AnimatedVisibility(
@@ -441,8 +503,7 @@ fun MediaPlayerPanel(
                                             Icons.Default.PlayArrow,
                                             contentDescription = "Putar",
                                             modifier = Modifier.size(38.dp),
-                                            tint = if (canToggle) MaterialTheme.colorScheme.onPrimary
-                                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                            tint = MaterialTheme.colorScheme.onPrimary,
                                         )
                                     }
                                 }

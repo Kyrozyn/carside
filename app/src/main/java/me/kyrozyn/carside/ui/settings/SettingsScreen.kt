@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.BluetoothAudio
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LocationOn
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -40,16 +42,22 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +65,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import me.kyrozyn.carside.core.BluetoothMusicHelper
+import me.kyrozyn.carside.core.CarBluetoothApp
 import me.kyrozyn.carside.data.settings.AppSettingsRepository
 import me.kyrozyn.carside.ui.theme.AppThemePalette
 
@@ -144,6 +154,135 @@ fun SettingsScreen(
                 ) {
                     Text("Buka pengaturan launcher")
                 }
+            }
+
+            // ── Musik Bluetooth Head Unit ──────────────────────────────
+            val context = LocalContext.current
+            val customBtPkg by settingsRepository.customBluetoothMusicPackage.collectAsState()
+            val customBtAct by settingsRepository.customBluetoothMusicActivity.collectAsState()
+            var detectedBtApp by remember(customBtPkg, customBtAct) {
+                mutableStateOf(BluetoothMusicHelper.detect(context, settingsRepository))
+            }
+            var showBtAppPickerDialog by remember { mutableStateOf(false) }
+
+            SettingsCardWithIcon(
+                icon = Icons.Default.BluetoothAudio,
+                iconTint = MaterialTheme.colorScheme.primary,
+                iconBackground = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                title = "Musik Bluetooth Head Unit",
+                description = "Head unit Android (Audiobank, TS10, dsb.) memerlukan aplikasi Bluetooth bawaan agar MCU menyalurkan audio Bluetooth ponsel ke speaker mobil.\n\n" +
+                    if (detectedBtApp != null) "Aplikasi aktif: ${detectedBtApp?.label} (${detectedBtApp?.packageName})" else "Belum terdeteksi otomatis.",
+            ) {
+                Row(
+                    modifier = Modifier.padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            BluetoothMusicHelper.launch(context, settingsRepository)
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text("Buka Musik Bluetooth")
+                    }
+
+                    OutlinedButton(
+                        onClick = { showBtAppPickerDialog = true },
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text("Pilih Aplikasi")
+                    }
+                }
+            }
+
+            if (showBtAppPickerDialog) {
+                val allBtApps = remember { BluetoothMusicHelper.findAllBluetoothApps(context) }
+                AlertDialog(
+                    onDismissRequest = { showBtAppPickerDialog = false },
+                    title = { Text("Pilih Aplikasi Bluetooth Music") },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            Text(
+                                text = "Pilih aplikasi Bluetooth bawaan head unit Audiobank Anda:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        settingsRepository.setCustomBluetoothMusic(null, null)
+                                        detectedBtApp = BluetoothMusicHelper.detect(context, settingsRepository)
+                                        showBtAppPickerDialog = false
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = customBtPkg == null,
+                                    onClick = {
+                                        settingsRepository.setCustomBluetoothMusic(null, null)
+                                        detectedBtApp = BluetoothMusicHelper.detect(context, settingsRepository)
+                                        showBtAppPickerDialog = false
+                                    },
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text("Deteksi Otomatis (Rekomendasi)", fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        "Mendeteksi otomatis (com.ts.bt, com.autochips.bluetooth, dsb.)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+
+                            allBtApps.forEach { app ->
+                                val isSelected = customBtPkg == app.packageName && customBtAct == app.activityName
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            settingsRepository.setCustomBluetoothMusic(app.packageName, app.activityName)
+                                            detectedBtApp = app
+                                            showBtAppPickerDialog = false
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    RadioButton(
+                                        selected = isSelected,
+                                        onClick = {
+                                            settingsRepository.setCustomBluetoothMusic(app.packageName, app.activityName)
+                                            detectedBtApp = app
+                                            showBtAppPickerDialog = false
+                                        },
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Column {
+                                        Text(app.label, fontWeight = FontWeight.Medium)
+                                        Text(
+                                            app.targetId,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showBtAppPickerDialog = false }) {
+                            Text("Tutup")
+                        }
+                    },
+                )
             }
 
             // ── Peringatan kecepatan ────────────────────────────────────

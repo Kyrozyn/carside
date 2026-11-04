@@ -83,6 +83,7 @@ fun DashboardScreen(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeekTo: (Long) -> Unit,
+    onOpenBluetoothMusic: () -> Unit = {},
     onOpenAppDrawer: () -> Unit,
     onOpenInternetRadio: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -203,6 +204,7 @@ fun DashboardScreen(
                             onNext = onNext,
                             onPrevious = onPrevious,
                             onSeekTo = onSeekTo,
+                            onOpenBluetoothMusic = onOpenBluetoothMusic,
                             lyricsState = uiState.lyricsState,
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -753,7 +755,7 @@ private fun ShortcutPickerSheet(
 
     LaunchedEffect(Unit) {
         apps = withContext(Dispatchers.Default) {
-            InstalledAppsLoader.loadLaunchableApps(pm)
+            InstalledAppsLoader.loadLaunchableApps(pm, context)
         }
     }
 
@@ -781,13 +783,13 @@ private fun ShortcutPickerSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp),
         ) {
-            items(apps, key = { it.packageName }) { app ->
+            items(apps, key = { it.targetId }) { app ->
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
                         .clip(RoundedCornerShape(32.dp))
-                        .clickable { onSelect(app.packageName) },
+                        .clickable { onSelect(app.targetId) },
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
                 ) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
@@ -797,7 +799,7 @@ private fun ShortcutPickerSheet(
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = app.packageName,
+                            text = app.targetId,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

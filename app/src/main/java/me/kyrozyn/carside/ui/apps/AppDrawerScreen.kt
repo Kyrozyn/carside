@@ -66,7 +66,7 @@ fun AppDrawerScreen(
 
     LaunchedEffect(Unit) {
         apps = withContext(Dispatchers.Default) {
-            InstalledAppsLoader.loadLaunchableApps(pm)
+            InstalledAppsLoader.loadLaunchableApps(pm, context)
         }
     }
 
@@ -142,11 +142,11 @@ fun AppDrawerScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                items(filtered, key = { it.packageName }) { app ->
+                items(filtered, key = { it.targetId }) { app ->
                     AppGridItem(
                         app = app,
                         packageManager = pm,
-                        onClick = { onLaunchApp(app.packageName) },
+                        onClick = { onLaunchApp(app.targetId) },
                     )
                 }
             }

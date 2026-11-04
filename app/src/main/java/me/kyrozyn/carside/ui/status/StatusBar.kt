@@ -261,8 +261,9 @@ private fun ShortcutItem(
     val context = LocalContext.current
     val appIcon = remember(packageName) {
         if (packageName.isNullOrBlank()) return@remember null
+        val pkg = packageName.substringBefore("/")
         runCatching {
-            context.packageManager.getApplicationIcon(packageName).toBitmap(96, 96).asImageBitmap()
+            context.packageManager.getApplicationIcon(pkg).toBitmap(96, 96).asImageBitmap()
         }.getOrNull()
     }
 

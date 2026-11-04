@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import me.kyrozyn.carside.core.BluetoothMusicHelper
 import me.kyrozyn.carside.core.isCarsideNotificationListenerEnabled
 import me.kyrozyn.carside.core.requestCarsideNotificationListenerRebind
 import androidx.core.content.ContextCompat
@@ -191,15 +192,7 @@ class MainActivity : ComponentActivity() {
                     AppDrawerScreen(
                         onBack = { showAppDrawer = false },
                         onHome = resetToHome,
-                        onLaunchApp = { packageName ->
-                            packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
-                                launchIntent.addFlags(
-                                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                                        Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED,
-                                )
-                                startActivity(launchIntent)
-                            }
-                        },
+                        onLaunchApp = { target -> launchAppOrTarget(target) },
                     )
                 } else if (showInternetRadio) {
                     InternetRadioScreen(
@@ -286,6 +279,9 @@ class MainActivity : ComponentActivity() {
                         onNext = vm::onNext,
                         onPrevious = vm::onPrevious,
                         onSeekTo = vm::onSeekTo,
+                        onOpenBluetoothMusic = {
+                            BluetoothMusicHelper.launch(this, container.settingsRepository)
+                        },
                         onOpenAppDrawer = { showAppDrawer = true },
                         onOpenInternetRadio = { showInternetRadio = true },
                         onOpenSettings = { showSettings = true },
@@ -293,15 +289,7 @@ class MainActivity : ComponentActivity() {
                         internetRadioState = internetRadioState,
                         onStopInternetRadio = { container.internetRadioController.stop() },
                         onSetUseGpsForwardMapBearing = vm::setUseGpsForwardMapBearing,
-                        onLaunchShortcutApp = { packageName ->
-                            packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
-                                launchIntent.addFlags(
-                                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                                        Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED,
-                                )
-                                startActivity(launchIntent)
-                            }
-                        },
+                        onLaunchShortcutApp = { target -> launchAppOrTarget(target) },
                         onOpenShortcutPicker = vm::openShortcutPicker,
                         onDismissShortcutPicker = vm::closeShortcutPicker,
                         onSelectShortcutApp = vm::setShortcutPackage,
@@ -327,6 +315,31 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
+    }
+
+    private fun launchAppOrTarget(target: String) {
+        if (target.contains("/")) {
+            val parts = target.split("/", limit = 2)
+            val pkg = parts[0]
+            val cls = parts[1]
+            try {
+                val intent = Intent(Intent.ACTION_MAIN).apply {
+                    setClassName(pkg, cls)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                }
+                startActivity(intent)
+                return
+            } catch (_: Exception) {}
+        }
+
+        val pkg = target.substringBefore("/")
+        val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
+        if (launchIntent != null) {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+            startActivity(launchIntent)
+        } else {
+            BluetoothMusicHelper.launchTarget(this, target)
+        }
     }
 
     private fun hideSystemBars() {

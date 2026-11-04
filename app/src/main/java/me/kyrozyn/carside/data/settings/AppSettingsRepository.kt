@@ -44,6 +44,25 @@ class AppSettingsRepository(context: Context) {
     )
     val locationRefreshIntervalMs: StateFlow<Long> = _locationRefreshIntervalMs.asStateFlow()
 
+    private val _customBluetoothMusicPackage = MutableStateFlow(
+        prefs.getString(KEY_CUSTOM_BT_MUSIC_PACKAGE, null)
+    )
+    val customBluetoothMusicPackage: StateFlow<String?> = _customBluetoothMusicPackage.asStateFlow()
+
+    private val _customBluetoothMusicActivity = MutableStateFlow(
+        prefs.getString(KEY_CUSTOM_BT_MUSIC_ACTIVITY, null)
+    )
+    val customBluetoothMusicActivity: StateFlow<String?> = _customBluetoothMusicActivity.asStateFlow()
+
+    fun setCustomBluetoothMusic(packageName: String?, activityName: String?) {
+        _customBluetoothMusicPackage.value = packageName
+        _customBluetoothMusicActivity.value = activityName
+        prefs.edit()
+            .putString(KEY_CUSTOM_BT_MUSIC_PACKAGE, packageName)
+            .putString(KEY_CUSTOM_BT_MUSIC_ACTIVITY, activityName)
+            .apply()
+    }
+
     fun setUseGpsForwardMapBearing(enabled: Boolean) {
         if (_useGpsForwardMapBearing.value == enabled) return
         _useGpsForwardMapBearing.value = enabled
@@ -182,5 +201,7 @@ class AppSettingsRepository(context: Context) {
         private const val DEFAULT_LOCATION_DOT_SIZE = 60f
         private const val KEY_LOCATION_REFRESH_INTERVAL_MS = "location_refresh_interval_ms"
         private const val DEFAULT_LOCATION_REFRESH_INTERVAL_MS = 60_000L
+        private const val KEY_CUSTOM_BT_MUSIC_PACKAGE = "custom_bt_music_package"
+        private const val KEY_CUSTOM_BT_MUSIC_ACTIVITY = "custom_bt_music_activity"
     }
 }
