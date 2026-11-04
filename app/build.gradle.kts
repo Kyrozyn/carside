@@ -15,12 +15,17 @@ android {
         }
     }
 
+    val appVersionCode = (project.findProperty("VERSION_CODE") as? String
+        ?: System.getenv("VERSION_CODE"))?.toIntOrNull() ?: 22
+    val appVersionName = (project.findProperty("VERSION_NAME") as? String
+        ?: System.getenv("VERSION_NAME")) ?: "1.0.$appVersionCode"
+
     defaultConfig {
         applicationId = "me.kyrozyn.carside"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

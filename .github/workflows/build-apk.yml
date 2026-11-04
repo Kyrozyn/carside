@@ -47,14 +47,33 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Calculate Version
+        id: version
+        run: |
+          # Base offset agar versionCode berlanjut dari 22
+          # GITHUB_RUN_NUMBER otomatis naik 1 setiap kali build dijalankan di GitHub Actions
+          BASE_OFFSET=22
+          V_CODE=$((BASE_OFFSET + GITHUB_RUN_NUMBER))
+          V_NAME="1.0.${V_CODE}"
+          echo "VERSION_CODE=${V_CODE}" >> $GITHUB_ENV
+          echo "VERSION_NAME=${V_NAME}" >> $GITHUB_ENV
+          echo "VERSION_CODE=${V_CODE}" >> $GITHUB_OUTPUT
+          echo "VERSION_NAME=${V_NAME}" >> $GITHUB_OUTPUT
+          echo "Bumping version to: ${V_NAME} (versionCode: ${V_CODE})"
+
       - name: Build APKs & AAB (Release & Debug)
         env:
           KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
         run: |
-          ./gradlew assembleRelease assembleDebug bundleRelease --stacktrace
+          ./gradlew assembleRelease assembleDebug bundleRelease \
+            -PVERSION_CODE="${VERSION_CODE}" \
+            -PVERSION_NAME="${VERSION_NAME}" \
+            --stacktrace
 
       - name: Prepare Artifacts (APKs & AAB)
         run: |
@@ -84,12 +103,13 @@ jobs:
         continue-on-error: true
         with:
           tag_name: latest
-          name: "Carside Latest Build"
+          name: "Carside v${{ env.VERSION_NAME }}"
           body: |
             ## 🚗 Carside Automated Build
             
             Build otomatis dari branch `main`.
             
+            - **Versi**: ${{ env.VERSION_NAME }} (versionCode: ${{ env.VERSION_CODE }})
             - **Commit**: ${{ github.sha }}
             - **Branch**: main
             
