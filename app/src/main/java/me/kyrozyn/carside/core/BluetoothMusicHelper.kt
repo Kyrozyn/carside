@@ -256,7 +256,12 @@ object BluetoothMusicHelper {
         // Coba cari activity MAIN apapun di dalam package tersebut
         try {
             val queryIntent = Intent(Intent.ACTION_MAIN).setPackage(pkg)
-            val resolves = pm.queryIntentActivities(queryIntent, 0)
+            @Suppress("DEPRECATION")
+            val resolves = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.queryIntentActivities(queryIntent, PackageManager.ResolveInfoFlags.of(0L))
+            } else {
+                pm.queryIntentActivities(queryIntent, 0)
+            }
             val activity = resolves.firstOrNull()?.activityInfo
             if (activity != null) {
                 val intent = Intent(Intent.ACTION_MAIN).apply {
@@ -294,17 +299,15 @@ object BluetoothMusicHelper {
     private fun scanForBluetoothMusicActivities(context: Context): List<CarBluetoothApp> {
         val pm = context.packageManager
         val queryIntent = Intent(Intent.ACTION_MAIN)
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong())
-        } else {
-            PackageManager.MATCH_ALL
-        }
 
         val resolves = runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                pm.queryIntentActivities(queryIntent, flags)
+                pm.queryIntentActivities(
+                    queryIntent,
+                    PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong()),
+                )
             } else {
-                pm.queryIntentActivities(queryIntent, flags)
+                pm.queryIntentActivities(queryIntent, PackageManager.MATCH_ALL)
             }
         }.getOrDefault(emptyList())
 
