@@ -54,6 +54,29 @@ class AppSettingsRepository(context: Context) {
     )
     val customBluetoothMusicActivity: StateFlow<String?> = _customBluetoothMusicActivity.asStateFlow()
 
+    private val _autoModeEnabled = MutableStateFlow(
+        prefs.getBoolean(KEY_AUTO_MODE_ENABLED, false),
+    )
+    val autoModeEnabled: StateFlow<Boolean> = _autoModeEnabled.asStateFlow()
+
+    private val _googleMapsApiKey = MutableStateFlow(
+        prefs.getString(KEY_GOOGLE_MAPS_API_KEY, null),
+    )
+    val googleMapsApiKey: StateFlow<String?> = _googleMapsApiKey.asStateFlow()
+
+    fun setAutoModeEnabled(enabled: Boolean) {
+        if (_autoModeEnabled.value == enabled) return
+        _autoModeEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_AUTO_MODE_ENABLED, enabled).apply()
+    }
+
+    fun setGoogleMapsApiKey(apiKey: String?) {
+        val trimmed = apiKey?.trim()?.ifBlank { null }
+        if (_googleMapsApiKey.value == trimmed) return
+        _googleMapsApiKey.value = trimmed
+        prefs.edit().putString(KEY_GOOGLE_MAPS_API_KEY, trimmed).apply()
+    }
+
     fun setCustomBluetoothMusic(packageName: String?, activityName: String?) {
         _customBluetoothMusicPackage.value = packageName
         _customBluetoothMusicActivity.value = activityName
@@ -203,5 +226,7 @@ class AppSettingsRepository(context: Context) {
         private const val DEFAULT_LOCATION_REFRESH_INTERVAL_MS = 60_000L
         private const val KEY_CUSTOM_BT_MUSIC_PACKAGE = "custom_bt_music_package"
         private const val KEY_CUSTOM_BT_MUSIC_ACTIVITY = "custom_bt_music_activity"
+        private const val KEY_AUTO_MODE_ENABLED = "auto_mode_enabled"
+        private const val KEY_GOOGLE_MAPS_API_KEY = "google_maps_api_key"
     }
 }

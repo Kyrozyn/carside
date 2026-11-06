@@ -64,6 +64,10 @@ data class DashboardUiState(
     val lyricsState: LyricsState,
     /** Apakah layar lirik fullscreen terbuka. */
     val lyricsFullscreenOpen: Boolean,
+    /** Mode Auto (Google Maps bergaya Android Auto). */
+    val autoModeEnabled: Boolean = false,
+    /** Google Maps Platform API Key (untuk Maps SDK, Directions, dan Places). */
+    val googleMapsApiKey: String? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -100,6 +104,10 @@ class DashboardViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     private val shortcutPackages = container.settingsRepository.shortcutPackages
         .stateIn(viewModelScope, SharingStarted.Eagerly, List(4) { null })
+    private val autoModeEnabled = container.settingsRepository.autoModeEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val googleMapsApiKey = container.settingsRepository.googleMapsApiKey
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val uiState: StateFlow<DashboardUiState> = combine(
         combine(
@@ -122,10 +130,16 @@ class DashboardViewModel(
         combine(_compass, _browseOpen, _locationPermission, mapRotationMode) { compass, browse, perm, useGps ->
             Quadruple(compass, browse, perm, useGps)
         },
-        _userLocation,
-        container.tripRepository.activeTripState,
-    ) { mediaClock, shortcutsState, compassBrowsePermMode, userLoc, activeTrip ->
+        combine(_userLocation, container.tripRepository.activeTripState) { userLoc, activeTrip ->
+            Pair(userLoc, activeTrip)
+        },
+        combine(autoModeEnabled, googleMapsApiKey) { autoEnabled, apiKey ->
+            Pair(autoEnabled, apiKey)
+        },
+    ) { mediaClock, shortcutsState, compassBrowsePermMode, userLocActiveTrip, autoSettings ->
         val compass = compassBrowsePermMode.first
+        val userLoc = userLocActiveTrip.first
+        val activeTrip = userLocActiveTrip.second
         val mode = if (compassBrowsePermMode.fourth) MapRotationMode.FORWARD_GPS else MapRotationMode.COMPASS
         val mapBearing = when (mode) {
             MapRotationMode.COMPASS -> compass.degrees
@@ -148,6 +162,8 @@ class DashboardViewModel(
             navigation = mediaClock.fourth,
             lyricsState = shortcutsState.fourth,
             lyricsFullscreenOpen = shortcutsState.fifth,
+            autoModeEnabled = autoSettings.first,
+            googleMapsApiKey = autoSettings.second,
         )
     }.stateIn(
         viewModelScope,
@@ -174,6 +190,8 @@ class DashboardViewModel(
             navigation = NavigationState.Idle,
             lyricsState = LyricsState.Idle,
             lyricsFullscreenOpen = false,
+            autoModeEnabled = container.settingsRepository.autoModeEnabled.value,
+            googleMapsApiKey = container.settingsRepository.googleMapsApiKey.value,
         ),
     )
 

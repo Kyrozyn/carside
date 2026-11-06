@@ -22,6 +22,8 @@ class CarsideApplication : Application() {
         initOsmdroid()
         initCoil()
         container = AppContainer(this)
+        val apiKey = container.settingsRepository.googleMapsApiKey.value
+        me.kyrozyn.carside.core.GoogleMapsHelper.applyApiKey(this, apiKey)
     }
 
     private fun initCoil() {

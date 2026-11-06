@@ -64,6 +64,7 @@ import me.kyrozyn.carside.domain.model.InternetRadioState
 import me.kyrozyn.carside.ui.apps.InstalledAppsLoader
 import me.kyrozyn.carside.ui.apps.LaunchableApp
 import me.kyrozyn.carside.ui.internetradio.InternetRadioMiniPanel
+import me.kyrozyn.carside.ui.map.AutoMapPane
 import me.kyrozyn.carside.ui.map.MapPane
 import me.kyrozyn.carside.ui.media.LyricsFullscreenScreen
 import me.kyrozyn.carside.ui.media.MediaPlayerPanel
@@ -156,6 +157,15 @@ fun DashboardScreen(
                                 if (pkg.isNotBlank()) onLaunchShortcutApp(pkg)
                             },
                             onSwitchToMap = { showMapOverride = true },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else if (uiState.autoModeEnabled) {
+                        AutoMapPane(
+                            hasLocationPermission = uiState.locationPermissionGranted,
+                            userLocation = uiState.userLocation,
+                            bearing = uiState.mapBearingDegrees,
+                            apiKey = uiState.googleMapsApiKey,
+                            onOpenSettings = onOpenSettings,
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
