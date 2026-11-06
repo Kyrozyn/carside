@@ -301,6 +301,7 @@ class MainActivity : ComponentActivity() {
                         hasOfflineMaps = hasOfflineMaps,
                         locationDotSize = locationDotSize,
                         locationRefreshIntervalMs = locationRefreshIntervalMs,
+                        autoNavigationManager = container.autoNavigationManager,
                     )
                 }
             }

@@ -38,6 +38,7 @@ data class AutoRouteResult(
     val durationSeconds: Long,
     val startAddress: String,
     val endAddress: String,
+    val summary: String = "",
     val steps: List<AutoRouteStep>,
 )
 
@@ -160,88 +161,109 @@ object GoogleMapsHelper {
     }
 
     /**
-     * Mengambil rute perjalanan menggunakan Google Directions API.
+     * Mengambil seluruh kemungkinan rute perjalanan menggunakan Google Directions API (alternatives=true).
      */
-    suspend fun getDirections(
+    suspend fun getRoutes(
         origin: LatLng,
         destination: LatLng,
         apiKey: String?,
-    ): AutoRouteResult? = withContext(Dispatchers.IO) {
-        if (apiKey.isNullOrBlank()) return@withContext null
+    ): List<AutoRouteResult> = withContext(Dispatchers.IO) {
+        if (apiKey.isNullOrBlank()) return@withContext emptyList()
 
         val url = "https://maps.googleapis.com/maps/api/directions/json" +
             "?origin=${origin.latitude},${origin.longitude}" +
             "&destination=${destination.latitude},${destination.longitude}" +
             "&mode=driving" +
+            "&alternatives=true" +
             "&language=id" +
             "&key=$apiKey"
 
         val request = Request.Builder().url(url).build()
         try {
             val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful) return@withContext null
-            val body = response.body?.string() ?: return@withContext null
+            if (!response.isSuccessful) return@withContext emptyList()
+            val body = response.body?.string() ?: return@withContext emptyList()
             val json = JSONObject(body)
 
-            val routes = json.optJSONArray("routes")
-            if (routes == null || routes.length() == 0) return@withContext null
-            val route = routes.getJSONObject(0)
+            val routesArr = json.optJSONArray("routes")
+            if (routesArr == null || routesArr.length() == 0) return@withContext emptyList()
 
-            val overviewPoly = route.optJSONObject("overview_polyline")?.optString("points") ?: ""
-            val decodedPoints = decodePolyline(overviewPoly)
+            val routeResults = mutableListOf<AutoRouteResult>()
 
-            val legs = route.optJSONArray("legs")
-            if (legs == null || legs.length() == 0) return@withContext null
-            val leg = legs.getJSONObject(0)
+            for (i in 0 until routesArr.length()) {
+                val route = routesArr.getJSONObject(i)
+                val summary = route.optString("summary", "")
+                val overviewPoly = route.optJSONObject("overview_polyline")?.optString("points") ?: ""
+                val decodedPoints = decodePolyline(overviewPoly)
 
-            val distanceText = leg.optJSONObject("distance")?.optString("text", "—") ?: "—"
-            val distanceMeters = leg.optJSONObject("distance")?.optLong("value", 0L) ?: 0L
-            val durationText = leg.optJSONObject("duration")?.optString("text", "—") ?: "—"
-            val durationSeconds = leg.optJSONObject("duration")?.optLong("value", 0L) ?: 0L
-            val startAddr = leg.optString("start_address", "")
-            val endAddr = leg.optString("end_address", "")
+                val legs = route.optJSONArray("legs")
+                if (legs == null || legs.length() == 0) continue
+                val leg = legs.getJSONObject(0)
 
-            val stepsList = mutableListOf<AutoRouteStep>()
-            val stepsArr = leg.optJSONArray("steps")
-            if (stepsArr != null) {
-                for (s in 0 until stepsArr.length()) {
-                    val stepObj = stepsArr.optJSONObject(s) ?: continue
-                    val rawInstruction = stepObj.optString("html_instructions", "")
-                    val cleanInstruction = rawInstruction
-                        .replace("<[^>]*>".toRegex(), " ")
-                        .replace("&nbsp;", " ")
-                        .trim()
-                    val stepDist = stepObj.optJSONObject("distance")?.optString("text", "") ?: ""
-                    val maneuver = stepObj.optString("maneuver").takeIf { it.isNotBlank() }
-                    val startLoc = stepObj.optJSONObject("start_location")
-                    val stepLatLng = if (startLoc != null) {
-                        LatLng(startLoc.optDouble("lat", 0.0), startLoc.optDouble("lng", 0.0))
-                    } else LatLng(0.0, 0.0)
+                val distanceText = leg.optJSONObject("distance")?.optString("text", "—") ?: "—"
+                val distanceMeters = leg.optJSONObject("distance")?.optLong("value", 0L) ?: 0L
+                val durationText = leg.optJSONObject("duration")?.optString("text", "—") ?: "—"
+                val durationSeconds = leg.optJSONObject("duration")?.optLong("value", 0L) ?: 0L
+                val startAddr = leg.optString("start_address", "")
+                val endAddr = leg.optString("end_address", "")
 
-                    stepsList.add(
-                        AutoRouteStep(
-                            instruction = cleanInstruction,
-                            distanceText = stepDist,
-                            maneuver = maneuver,
-                            latLng = stepLatLng,
-                        ),
-                    )
+                val stepsList = mutableListOf<AutoRouteStep>()
+                val stepsArr = leg.optJSONArray("steps")
+                if (stepsArr != null) {
+                    for (s in 0 until stepsArr.length()) {
+                        val stepObj = stepsArr.optJSONObject(s) ?: continue
+                        val rawInstruction = stepObj.optString("html_instructions", "")
+                        val cleanInstruction = rawInstruction
+                            .replace("<[^>]*>".toRegex(), " ")
+                            .replace("&nbsp;", " ")
+                            .trim()
+                        val stepDist = stepObj.optJSONObject("distance")?.optString("text", "") ?: ""
+                        val maneuver = stepObj.optString("maneuver").takeIf { it.isNotBlank() }
+                        val startLoc = stepObj.optJSONObject("start_location")
+                        val stepLatLng = if (startLoc != null) {
+                            LatLng(startLoc.optDouble("lat", 0.0), startLoc.optDouble("lng", 0.0))
+                        } else LatLng(0.0, 0.0)
+
+                        stepsList.add(
+                            AutoRouteStep(
+                                instruction = cleanInstruction,
+                                distanceText = stepDist,
+                                maneuver = maneuver,
+                                latLng = stepLatLng,
+                            ),
+                        )
+                    }
                 }
-            }
 
-            AutoRouteResult(
-                points = decodedPoints,
-                distanceText = distanceText,
-                distanceMeters = distanceMeters,
-                durationText = durationText,
-                durationSeconds = durationSeconds,
-                startAddress = startAddr,
-                endAddress = endAddr,
-                steps = stepsList,
-            )
+                routeResults.add(
+                    AutoRouteResult(
+                        points = decodedPoints,
+                        distanceText = distanceText,
+                        distanceMeters = distanceMeters,
+                        durationText = durationText,
+                        durationSeconds = durationSeconds,
+                        startAddress = startAddr,
+                        endAddress = endAddr,
+                        summary = summary,
+                        steps = stepsList,
+                    ),
+                )
+            }
+            routeResults
         } catch (e: Exception) {
-            null
+            emptyList()
         }
+    }
+
+    /**
+     * Mengambil rute perjalanan utama menggunakan Google Directions API.
+     */
+    suspend fun getDirections(
+        origin: LatLng,
+        destination: LatLng,
+        apiKey: String?,
+    ): AutoRouteResult? {
+        return getRoutes(origin, destination, apiKey).firstOrNull()
     }
 
     /**

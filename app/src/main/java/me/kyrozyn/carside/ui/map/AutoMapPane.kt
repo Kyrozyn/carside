@@ -83,6 +83,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
+import me.kyrozyn.carside.data.navigation.AutoNavState
+import me.kyrozyn.carside.data.navigation.AutoNavigationManager
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
@@ -119,6 +123,7 @@ fun AutoMapPane(
     bearing: Float,
     apiKey: String?,
     onOpenSettings: () -> Unit,
+    autoNavigationManager: AutoNavigationManager? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -126,26 +131,32 @@ fun AutoMapPane(
     val coroutineScope = rememberCoroutineScope()
     val isDark = isSystemInDarkTheme()
 
+    // Sesi navigasi terpusat (persisten saat navigasi antar halaman)
+    val fallbackNavState = remember { MutableStateFlow(AutoNavState()) }
+    val navState by (autoNavigationManager?.navState ?: fallbackNavState).collectAsStateWithLifecycle()
+    val isNavigating = navState.isNavigating
+    val selectedPlace = navState.selectedPlace
+    val availableRoutes = navState.availableRoutes
+    val selectedRouteIndex = navState.selectedRouteIndex
+    val activeRoute = navState.activeRoute
+    val currentStepIndex = navState.currentStepIndex
+
     // Map instances & state
     var googleMap by remember { mutableStateOf<GoogleMap?>(null) }
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     var isTrafficEnabled by remember { mutableStateOf(true) }
     var mapType by remember { mutableStateOf(GoogleMap.MAP_TYPE_NORMAL) }
 
-    // Search & Navigation state
+    // Search state
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<AutoPlaceResult>>(emptyList()) }
-    var selectedPlace by remember { mutableStateOf<AutoPlaceResult?>(null) }
-    var activeRoute by remember { mutableStateOf<AutoRouteResult?>(null) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
-    var isNavigating by remember { mutableStateOf(false) }
-    var currentStepIndex by remember { mutableStateOf(0) }
 
     // Markers & Polylines references
     var destinationMarker by remember { mutableStateOf<Marker?>(null) }
     var userNavMarker by remember { mutableStateOf<Marker?>(null) }
-    var routePolyline by remember { mutableStateOf<Polyline?>(null) }
+    var routePolylines by remember { mutableStateOf<List<Polyline>>(emptyList()) }
 
     // Terapkan API Key ke metadata
     LaunchedEffect(apiKey) {
@@ -195,7 +206,7 @@ fun AutoMapPane(
                 map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 800, null)
             }
         } else if (isNavigating && activeRoute != null) {
-            val route = activeRoute!!
+            val route = activeRoute
             val steps = route.steps
             val currentStep = steps.getOrNull(currentStepIndex)
 
@@ -244,17 +255,29 @@ fun AutoMapPane(
         }
     }
 
-    // Gambar rute di peta saat activeRoute berubah
-    LaunchedEffect(googleMap, activeRoute) {
+    // Gambar rute di peta saat availableRoutes, selectedRouteIndex, isNavigating, atau selectedPlace berubah
+    LaunchedEffect(googleMap, availableRoutes, selectedRouteIndex, isNavigating, selectedPlace) {
         val map = googleMap ?: return@LaunchedEffect
-        routePolyline?.remove()
-        routePolyline = null
+        routePolylines.forEach { it.remove() }
+        routePolylines = emptyList()
         destinationMarker?.remove()
         destinationMarker = null
 
-        val route = activeRoute
         val place = selectedPlace
-        if (route != null && route.points.isNotEmpty()) {
+        if (place != null) {
+            val markerOptions = MarkerOptions()
+                .position(place.latLng)
+                .title(place.name)
+            destinationMarker = map.addMarker(markerOptions)
+        }
+
+        if (availableRoutes.isEmpty()) return@LaunchedEffect
+
+        val newPolylines = mutableListOf<Polyline>()
+
+        if (isNavigating) {
+            // Mode Navigasi: Tampilkan hanya rute yang sedang aktif
+            val route = activeRoute ?: availableRoutes.getOrNull(selectedRouteIndex) ?: return@LaunchedEffect
             val polyOptions = PolylineOptions()
                 .addAll(route.points)
                 .width(16f)
@@ -263,25 +286,48 @@ fun AutoMapPane(
                 .endCap(RoundCap())
                 .jointType(JointType.ROUND)
                 .geodesic(true)
+                .zIndex(2f)
 
-            routePolyline = map.addPolyline(polyOptions)
+            newPolylines.add(map.addPolyline(polyOptions))
+        } else {
+            // Mode Pemilihan Rute: Gambar seluruh kemungkinan rute
+            // Rute alternatif digambar abu-abu (zIndex 1f), rute aktif digambar biru (zIndex 2f)
+            availableRoutes.forEachIndexed { index, route ->
+                val isSelected = index == selectedRouteIndex
+                val colorHex = if (isSelected) "#1A73E8" else "#80868B"
+                val width = if (isSelected) 16f else 12f
+                val zIndex = if (isSelected) 2f else 1f
 
-            if (place != null) {
-                val markerOptions = MarkerOptions()
-                    .position(place.latLng)
-                    .title(place.name)
-                destinationMarker = map.addMarker(markerOptions)
+                val polyOptions = PolylineOptions()
+                    .addAll(route.points)
+                    .width(width)
+                    .color(AndroidColor.parseColor(colorHex))
+                    .startCap(RoundCap())
+                    .endCap(RoundCap())
+                    .jointType(JointType.ROUND)
+                    .geodesic(true)
+                    .zIndex(zIndex)
+                    .clickable(true)
+
+                newPolylines.add(map.addPolyline(polyOptions))
             }
 
-            // Zoom kamera mencakup seluruh rute
-            if (!isNavigating) {
-                try {
-                    val boundsBuilder = LatLngBounds.builder()
-                    route.points.forEach { boundsBuilder.include(it) }
+            // Zoom kamera mencakup seluruh rute alternatif
+            try {
+                val boundsBuilder = LatLngBounds.builder()
+                var count = 0
+                availableRoutes.forEach { r ->
+                    r.points.forEach { pt ->
+                        boundsBuilder.include(pt)
+                        count++
+                    }
+                }
+                if (count > 0) {
                     map.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120))
-                } catch (e: Exception) {}
-            }
+                }
+            } catch (e: Exception) {}
         }
+        routePolylines = newPolylines
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -315,6 +361,13 @@ fun AutoMapPane(
                         try {
                             map.isMyLocationEnabled = true
                         } catch (e: SecurityException) {}
+                    }
+
+                    map.setOnPolylineClickListener { clickedPolyline ->
+                        val clickedIdx = routePolylines.indexOf(clickedPolyline)
+                        if (clickedIdx >= 0) {
+                            autoNavigationManager?.selectRoute(clickedIdx)
+                        }
                     }
 
                     // Terapkan styling malam jika dark mode
@@ -546,20 +599,20 @@ fun AutoMapPane(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            selectedPlace = place
                                             searchResults = emptyList()
                                             searchQuery = place.name
-                                            // Minta rute ke tempat ini (fallback ke posisi peta jika GPS tidak tersedia)
+                                            // Minta seluruh rute ke tempat ini (fallback ke posisi peta jika GPS tidak tersedia)
                                             val startLatLng = userLocation?.let { LatLng(it.latitude, it.longitude) }
                                                 ?: googleMap?.cameraPosition?.target
                                                 ?: LatLng(-6.1754, 106.8272)
                                             isCalculatingRoute = true
                                             coroutineScope.launch {
-                                                activeRoute = GoogleMapsHelper.getDirections(
+                                                val routes = GoogleMapsHelper.getRoutes(
                                                     startLatLng,
                                                     place.latLng,
                                                     apiKey,
                                                 )
+                                                autoNavigationManager?.setPreviewRoutes(place, routes)
                                                 isCalculatingRoute = false
                                             }
                                         }
@@ -647,7 +700,7 @@ fun AutoMapPane(
 
         // ── CARD DETAIL TUJUAN & RUTE (Android Auto Style Bottom Sheet) ──
         if (selectedPlace != null && !isNavigating) {
-            val place = selectedPlace!!
+            val place = selectedPlace
             val route = activeRoute
 
             Surface(
@@ -687,12 +740,7 @@ fun AutoMapPane(
                         }
                         IconButton(
                             onClick = {
-                                selectedPlace = null
-                                activeRoute = null
-                                routePolyline?.remove()
-                                routePolyline = null
-                                destinationMarker?.remove()
-                                destinationMarker = null
+                                autoNavigationManager?.stopNavigation()
                             },
                         ) {
                             Icon(Icons.Default.Close, contentDescription = "Tutup")
@@ -707,42 +755,139 @@ fun AutoMapPane(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Text("Menghitung rute terbaik...", style = MaterialTheme.typography.bodyMedium)
+                            Text("Mencari seluruh kemungkinan rute...", style = MaterialTheme.typography.bodyMedium)
                         }
-                    } else if (route != null) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                    } else if (availableRoutes.isNotEmpty()) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // Jika ada lebih dari 1 alternatif rute, tampilkan pilihan rute
+                            if (availableRoutes.size > 1) {
                                 Text(
-                                    text = route.durationText,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    text = "(${route.distanceText})",
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    text = "Pilih Rute (${availableRoutes.size} rute tersedia):",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 8.dp),
                                 )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    availableRoutes.forEachIndexed { idx, r ->
+                                        val isSelected = idx == selectedRouteIndex
+                                        Surface(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable { autoNavigationManager?.selectRoute(idx) },
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (isSelected) {
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                            },
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                width = if (isSelected) 2.dp else 1.dp,
+                                                color = if (isSelected) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                                },
+                                            ),
+                                        ) {
+                                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        text = r.durationText,
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isSelected) {
+                                                            MaterialTheme.colorScheme.primary
+                                                        } else {
+                                                            MaterialTheme.colorScheme.onSurface
+                                                        },
+                                                    )
+                                                    if (idx == 0) {
+                                                        Spacer(Modifier.width(6.dp))
+                                                        Surface(
+                                                            shape = RoundedCornerShape(4.dp),
+                                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                                        ) {
+                                                            Text(
+                                                                text = "Tercepat",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = MaterialTheme.colorScheme.primary,
+                                                                fontWeight = FontWeight.Bold,
+                                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                val viaText = if (r.summary.isNotBlank()) "via ${r.summary}" else "Rute ${idx + 1}"
+                                                Text(
+                                                    text = "${r.distanceText} • $viaText",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(10.dp))
                             }
 
-                            Button(
-                                onClick = {
-                                    currentStepIndex = 0
-                                    isNavigating = true
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                ),
+                            // Detail rute yang dipilih + Tombol Mulai Navigasi
+                            val selRoute = activeRoute ?: availableRoutes.first()
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Icon(Icons.Default.DirectionsCar, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Mulai Navigasi", fontWeight = FontWeight.SemiBold)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = selRoute.durationText,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = "(${selRoute.distanceText})",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    if (selRoute.summary.isNotBlank()) {
+                                        Text(
+                                            text = "via ${selRoute.summary}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+
+                                Button(
+                                    onClick = {
+                                        autoNavigationManager?.startNavigation()
+                                    },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                    ),
+                                ) {
+                                    Icon(
+                                        Icons.Default.DirectionsCar,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Mulai Navigasi", fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                     } else {
@@ -754,11 +899,12 @@ fun AutoMapPane(
                                     ?: LatLng(-6.1754, 106.8272)
                                 isCalculatingRoute = true
                                 coroutineScope.launch {
-                                    activeRoute = GoogleMapsHelper.getDirections(
+                                    val routes = GoogleMapsHelper.getRoutes(
                                         startLatLng,
                                         place.latLng,
                                         apiKey,
                                     )
+                                    autoNavigationManager?.setPreviewRoutes(place, routes)
                                     isCalculatingRoute = false
                                 }
                             },
@@ -830,7 +976,7 @@ fun AutoMapPane(
                         if (steps.size > 1) {
                             Spacer(Modifier.width(6.dp))
                             IconButton(
-                                onClick = { if (currentStepIndex > 0) currentStepIndex-- },
+                                onClick = { autoNavigationManager?.previousStep() },
                                 enabled = currentStepIndex > 0,
                                 modifier = Modifier
                                     .size(30.dp)
@@ -846,7 +992,7 @@ fun AutoMapPane(
                             }
                             Spacer(Modifier.width(4.dp))
                             IconButton(
-                                onClick = { if (currentStepIndex < steps.size - 1) currentStepIndex++ },
+                                onClick = { autoNavigationManager?.nextStep() },
                                 enabled = currentStepIndex < steps.size - 1,
                                 modifier = Modifier
                                     .size(30.dp)
@@ -921,7 +1067,7 @@ fun AutoMapPane(
                 ) {
                     // Tombol Keluar Navigasi (✕)
                     IconButton(
-                        onClick = { isNavigating = false },
+                        onClick = { autoNavigationManager?.stopNavigation() },
                         modifier = Modifier.size(24.dp),
                     ) {
                         Icon(

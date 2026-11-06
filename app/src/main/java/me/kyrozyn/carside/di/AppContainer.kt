@@ -12,6 +12,7 @@ import me.kyrozyn.carside.data.offline.OfflineMapsRepository
 import me.kyrozyn.carside.data.location.FusedLocationDataSource
 import me.kyrozyn.carside.data.map.NoOpMapSession
 import me.kyrozyn.carside.data.media.SystemMediaSessionRepository
+import me.kyrozyn.carside.data.navigation.AutoNavigationManager
 import me.kyrozyn.carside.data.navigation.NavigationRepository
 import me.kyrozyn.carside.data.db.CarsideDatabase
 import me.kyrozyn.carside.data.fuel.RoomFuelRepository
@@ -40,6 +41,7 @@ class AppContainer(context: Context) {
     val networkStatusTracker = NetworkStatusTracker(appContext)
     val mediaController: MediaController = SystemMediaSessionRepository(appContext)
     val navigationRepository = NavigationRepository(appContext)
+    val autoNavigationManager = AutoNavigationManager()
     val compassProvider: CompassProvider = GpsCompassProvider(locationProvider)
     val mapSession: MapSession = NoOpMapSession()
     val settingsRepository = AppSettingsRepository(appContext)

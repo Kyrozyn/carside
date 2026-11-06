@@ -59,6 +59,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.kyrozyn.carside.data.navigation.AutoNavigationManager
 import me.kyrozyn.carside.domain.model.ActiveOfflineDownload
 import me.kyrozyn.carside.domain.model.InternetRadioState
 import me.kyrozyn.carside.ui.apps.InstalledAppsLoader
@@ -105,6 +106,7 @@ fun DashboardScreen(
     hasOfflineMaps: Boolean = false,
     locationDotSize: Float = 60f,
     locationRefreshIntervalMs: Long = 60_000L,
+    autoNavigationManager: AutoNavigationManager? = null,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -165,6 +167,7 @@ fun DashboardScreen(
                             userLocation = uiState.userLocation,
                             bearing = uiState.mapBearingDegrees,
                             apiKey = uiState.googleMapsApiKey,
+                            autoNavigationManager = autoNavigationManager,
                             onOpenSettings = onOpenSettings,
                             modifier = Modifier.fillMaxSize(),
                         )
