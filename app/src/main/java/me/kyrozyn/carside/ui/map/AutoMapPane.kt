@@ -29,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Directions
@@ -130,9 +131,11 @@ fun AutoMapPane(
     var activeRoute by remember { mutableStateOf<AutoRouteResult?>(null) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
     var isNavigating by remember { mutableStateOf(false) }
+    var currentStepIndex by remember { mutableStateOf(0) }
 
     // Markers & Polylines references
     var destinationMarker by remember { mutableStateOf<Marker?>(null) }
+    var userNavMarker by remember { mutableStateOf<Marker?>(null) }
     var routePolyline by remember { mutableStateOf<Polyline?>(null) }
 
     // Terapkan API Key ke metadata
@@ -166,29 +169,68 @@ fun AutoMapPane(
         }
     }
 
-    // Kamera mengikuti lokasi GPS (posisi kendaraan selalu berada di bagian bawah layar)
-    LaunchedEffect(googleMap, userLocation, isNavigating, bearing) {
+    // Kamera mengikuti lokasi & rute (posisi kendaraan selalu berada di bagian bawah layar)
+    LaunchedEffect(googleMap, userLocation, isNavigating, activeRoute, currentStepIndex, bearing) {
         val map = googleMap ?: return@LaunchedEffect
-        val loc = userLocation ?: return@LaunchedEffect
-        val latLng = LatLng(loc.latitude, loc.longitude)
 
         if (!isNavigating && activeRoute == null) {
+            val loc = userLocation
+            if (loc != null) {
+                val latLng = LatLng(loc.latitude, loc.longitude)
+                val cameraPosition = CameraPosition.Builder()
+                    .target(latLng)
+                    .zoom(16.5f)
+                    .bearing(bearing)
+                    .tilt(if (bearing > 0f) 25f else 0f)
+                    .build()
+                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 800, null)
+            }
+        } else if (isNavigating && activeRoute != null) {
+            val route = activeRoute!!
+            val steps = route.steps
+            val currentStep = steps.getOrNull(currentStepIndex)
+
+            // Target koordinat navigasi (jika GPS tidak ada di headunit, gunakan titik rute)
+            val navTarget = if (userLocation != null) {
+                LatLng(userLocation.latitude, userLocation.longitude)
+            } else if (currentStep != null && currentStepIndex > 0) {
+                currentStep.latLng
+            } else {
+                route.points.firstOrNull() ?: LatLng(-6.1754, 106.8272)
+            }
+
+            // Arah navigasi rute (peta berputar menghadap arah jalan raya ke depan)
+            val routeHeading = if (currentStepIndex < steps.size - 1 && steps.isNotEmpty()) {
+                val from = steps[currentStepIndex].latLng
+                val to = steps[currentStepIndex + 1].latLng
+                calculateBearing(from, to)
+            } else {
+                calculateInitialRouteBearing(route.points)
+            }
+
+            val effectiveBearing = if (bearing > 0f) bearing else routeHeading
+
+            // Close-up Zoom & 3D Tilt khas Google Maps Driving Mode
             val cameraPosition = CameraPosition.Builder()
-                .target(latLng)
-                .zoom(16.5f)
-                .bearing(bearing)
-                .tilt(if (bearing > 0f) 25f else 0f)
+                .target(navTarget)
+                .zoom(18.5f) // Zoom dekat agar jalan raya terlihat jelas dan nyaman
+                .bearing(effectiveBearing) // Menghadap ke arah navigasi/jalan raya
+                .tilt(55f) // Sudut 3D perspektif mengemudi
                 .build()
-            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 800, null)
-        } else if (isNavigating) {
-            // Dalam mode navigasi: kamera menghadap arah kendaraan (3D driving view)
-            val cameraPosition = CameraPosition.Builder()
-                .target(latLng)
-                .zoom(17.8f)
-                .bearing(bearing)
-                .tilt(48f)
-                .build()
-            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 800, null)
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000, null)
+
+            // Tampilkan marker kendaraan di posisi rute/navigasi
+            userNavMarker?.remove()
+            val markerOptions = MarkerOptions()
+                .position(navTarget)
+                .title("Kendaraan")
+                .rotation(effectiveBearing)
+                .flat(true)
+                .anchor(0.5f, 0.5f)
+            userNavMarker = map.addMarker(markerOptions)
+        } else if (!isNavigating) {
+            userNavMarker?.remove()
+            userNavMarker = null
         }
     }
 
@@ -497,17 +539,18 @@ fun AutoMapPane(
                                             selectedPlace = place
                                             searchResults = emptyList()
                                             searchQuery = place.name
-                                            // Minta rute ke tempat ini
-                                            if (userLocation != null) {
-                                                isCalculatingRoute = true
-                                                coroutineScope.launch {
-                                                    activeRoute = GoogleMapsHelper.getDirections(
-                                                        LatLng(userLocation.latitude, userLocation.longitude),
-                                                        place.latLng,
-                                                        apiKey,
-                                                    )
-                                                    isCalculatingRoute = false
-                                                }
+                                            // Minta rute ke tempat ini (fallback ke posisi peta jika GPS tidak tersedia)
+                                            val startLatLng = userLocation?.let { LatLng(it.latitude, it.longitude) }
+                                                ?: googleMap?.cameraPosition?.target
+                                                ?: LatLng(-6.1754, 106.8272)
+                                            isCalculatingRoute = true
+                                            coroutineScope.launch {
+                                                activeRoute = GoogleMapsHelper.getDirections(
+                                                    startLatLng,
+                                                    place.latLng,
+                                                    apiKey,
+                                                )
+                                                isCalculatingRoute = false
                                             }
                                         }
                                         .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -678,7 +721,10 @@ fun AutoMapPane(
                             }
 
                             Button(
-                                onClick = { isNavigating = true },
+                                onClick = {
+                                    currentStepIndex = 0
+                                    isNavigating = true
+                                },
                                 shape = RoundedCornerShape(16.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary,
@@ -690,19 +736,20 @@ fun AutoMapPane(
                             }
                         }
                     } else {
-                        // Jika rute belum dimuat (misal belum ada API key)
+                        // Jika rute belum dimuat (misal belum ada API key atau GPS)
                         Button(
                             onClick = {
-                                if (userLocation != null) {
-                                    isCalculatingRoute = true
-                                    coroutineScope.launch {
-                                        activeRoute = GoogleMapsHelper.getDirections(
-                                            LatLng(userLocation.latitude, userLocation.longitude),
-                                            place.latLng,
-                                            apiKey,
-                                        )
-                                        isCalculatingRoute = false
-                                    }
+                                val startLatLng = userLocation?.let { LatLng(it.latitude, it.longitude) }
+                                    ?: googleMap?.cameraPosition?.target
+                                    ?: LatLng(-6.1754, 106.8272)
+                                isCalculatingRoute = true
+                                coroutineScope.launch {
+                                    activeRoute = GoogleMapsHelper.getDirections(
+                                        startLatLng,
+                                        place.latLng,
+                                        apiKey,
+                                    )
+                                    isCalculatingRoute = false
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -720,7 +767,8 @@ fun AutoMapPane(
         // ── MODE NAVIGASI AKTIF: Turn-by-Turn Banner di Atas (Bawah Layar Bersih) ──
         if (isNavigating && activeRoute != null) {
             val route = activeRoute!!
-            val firstStep = route.steps.firstOrNull()
+            val steps = route.steps
+            val currentStep = steps.getOrNull(currentStepIndex) ?: steps.firstOrNull()
 
             Surface(
                 modifier = Modifier
@@ -750,7 +798,7 @@ fun AutoMapPane(
                         contentAlignment = Alignment.Center,
                     ) {
                         ManeuverIcon(
-                            maneuver = firstStep?.maneuver,
+                            maneuver = currentStep?.maneuver,
                             modifier = Modifier.size(26.dp),
                         )
                     }
@@ -761,7 +809,7 @@ fun AutoMapPane(
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = firstStep?.distanceText?.ifBlank { "Dalam 200 m" } ?: "Dalam 200 m",
+                                text = currentStep?.distanceText?.ifBlank { "Dalam 200 m" } ?: "Dalam 200 m",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
@@ -775,7 +823,7 @@ fun AutoMapPane(
                             )
                         }
                         Text(
-                            text = firstStep?.instruction ?: "Ikuti rute ke ${selectedPlace?.name ?: route.endAddress}",
+                            text = currentStep?.instruction ?: "Ikuti rute ke ${selectedPlace?.name ?: route.endAddress}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.9f),
                             maxLines = 1,
@@ -784,6 +832,42 @@ fun AutoMapPane(
                     }
 
                     Spacer(Modifier.width(8.dp))
+
+                    // Tombol Navigasi Langkah Rute (berguna terutama jika headunit tanpa GPS)
+                    if (steps.size > 1) {
+                        IconButton(
+                            onClick = { if (currentStepIndex > 0) currentStepIndex-- },
+                            enabled = currentStepIndex > 0,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = if (currentStepIndex > 0) 0.18f else 0.06f)),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Langkah Sebelumnya",
+                                tint = if (currentStepIndex > 0) Color.White else Color.White.copy(alpha = 0.35f),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(6.dp))
+                        IconButton(
+                            onClick = { if (currentStepIndex < steps.size - 1) currentStepIndex++ },
+                            enabled = currentStepIndex < steps.size - 1,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = if (currentStepIndex < steps.size - 1) 0.18f else 0.06f)),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Langkah Berikutnya",
+                                tint = if (currentStepIndex < steps.size - 1) Color.White else Color.White.copy(alpha = 0.35f),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(6.dp))
+                    }
 
                     // Tombol Keluar Navigasi (X Elegan)
                     IconButton(
@@ -893,4 +977,40 @@ private fun applyGoogleMapDarkStyle(context: Context, map: GoogleMap) {
     try {
         map.setMapStyle(MapStyleOptions(darkJson))
     } catch (e: Exception) {}
+}
+
+/**
+ * Menghitung sudut arah (bearing/heading) dari satu koordinat ke koordinat berikutnya.
+ */
+private fun calculateBearing(from: LatLng, to: LatLng): Float {
+    val lat1 = Math.toRadians(from.latitude)
+    val lon1 = Math.toRadians(from.longitude)
+    val lat2 = Math.toRadians(to.latitude)
+    val lon2 = Math.toRadians(to.longitude)
+    val dLon = lon2 - lon1
+    val y = Math.sin(dLon) * Math.cos(lat2)
+    val x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon)
+    val brng = Math.toDegrees(Math.atan2(y, x)).toFloat()
+    return (brng + 360f) % 360f
+}
+
+/**
+ * Menghitung sudut arah awal perjalanan rute agar peta berputar menghadap ke arah jalan navigasi.
+ */
+private fun calculateInitialRouteBearing(points: List<LatLng>): Float {
+    if (points.size < 2) return 0f
+    val start = points[0]
+    for (i in 1 until points.size) {
+        val next = points[i]
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(
+            start.latitude, start.longitude,
+            next.latitude, next.longitude,
+            results,
+        )
+        if (results[0] >= 15f || i == points.lastIndex) {
+            return calculateBearing(start, next)
+        }
+    }
+    return calculateBearing(points[0], points[1])
 }
