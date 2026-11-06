@@ -1,6 +1,10 @@
 package me.kyrozyn.carside.ui.map
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Color as AndroidColor
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -81,6 +86,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.JointType
 import com.google.android.gms.maps.model.LatLng
@@ -91,6 +98,8 @@ import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.Polyline
 import com.google.android.gms.maps.model.PolylineOptions
 import com.google.android.gms.maps.model.RoundCap
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import me.kyrozyn.carside.core.AutoPlaceResult
 import me.kyrozyn.carside.core.AutoRouteResult
@@ -135,6 +144,7 @@ fun AutoMapPane(
 
     // Markers & Polylines references
     var destinationMarker by remember { mutableStateOf<Marker?>(null) }
+    var userNavMarker by remember { mutableStateOf<Marker?>(null) }
     var routePolyline by remember { mutableStateOf<Polyline?>(null) }
 
     // Terapkan API Key ke metadata
@@ -217,6 +227,20 @@ fun AutoMapPane(
                 .tilt(55f) // Sudut 3D perspektif mengemudi
                 .build()
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000, null)
+
+            // Tampilkan icon kendaraan berupa lingkaran biru dengan panah putih khas Android Auto
+            userNavMarker?.remove()
+            val navIcon = createNavArrowBitmap(context)
+            val markerOptions = MarkerOptions()
+                .position(navTarget)
+                .icon(navIcon)
+                .rotation(effectiveBearing)
+                .flat(true)
+                .anchor(0.5f, 0.5f)
+            userNavMarker = map.addMarker(markerOptions)
+        } else if (!isNavigating) {
+            userNavMarker?.remove()
+            userNavMarker = null
         }
     }
 
@@ -750,124 +774,198 @@ fun AutoMapPane(
             }
         }
 
-        // ── MODE NAVIGASI AKTIF: Turn-by-Turn Banner di Atas (Bawah Layar Bersih) ──
+        // ── MODE NAVIGASI AKTIF: Tampilan Resmi Android Auto Coolwalk ────────
         if (isNavigating && activeRoute != null) {
             val route = activeRoute!!
             val steps = route.steps
             val currentStep = steps.getOrNull(currentStepIndex) ?: steps.firstOrNull()
+            val nextStep = steps.getOrNull(currentStepIndex + 1)
 
-            Surface(
+            // 1. KARTU MANUVER HIJAU (Pojok Kiri Atas ala Android Auto)
+            Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .fillMaxWidth()
-                    .padding(start = 12.dp, top = 68.dp, end = 12.dp),
-                shape = RoundedCornerShape(22.dp),
-                color = Color(0xFF0F5132), // Emerald Navigation Green
-                shadowElevation = 10.dp,
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    Color(0xFF28724D),
-                ),
+                    .padding(start = 12.dp, top = 66.dp)
+                    .widthIn(max = 380.dp),
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                // Header Manuver Utama
+                Surface(
+                    shape = RoundedCornerShape(
+                        topStart = 16.dp,
+                        topEnd = 16.dp,
+                        bottomStart = if (nextStep != null) 0.dp else 16.dp,
+                        bottomEnd = 16.dp,
+                    ),
+                    color = Color(0xFF0F5A47), // Hijau tua Android Auto
+                    shadowElevation = 8.dp,
                 ) {
-                    // Icon Manuver
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center,
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         ManeuverIcon(
                             maneuver = currentStep?.maneuver,
-                            modifier = Modifier.size(26.dp),
+                            modifier = Modifier.size(28.dp),
                         )
-                    }
-
-                    Spacer(Modifier.width(12.dp))
-
-                    // Detail Manuver, ETA & Jarak
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = currentStep?.distanceText?.ifBlank { "Dalam 200 m" } ?: "Dalam 200 m",
+                                text = currentStep?.instruction?.ifBlank { "Ikuti jalan terus" } ?: "Ikuti rute ke ${selectedPlace?.name ?: route.endAddress}",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
-                            Spacer(Modifier.width(8.dp))
+                            if (!currentStep?.distanceText.isNullOrBlank()) {
+                                Text(
+                                    text = currentStep?.distanceText.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                )
+                            }
+                        }
+
+                        // Tombol panah langkah rute (berguna terutama jika headunit tanpa GPS)
+                        if (steps.size > 1) {
+                            Spacer(Modifier.width(6.dp))
+                            IconButton(
+                                onClick = { if (currentStepIndex > 0) currentStepIndex-- },
+                                enabled = currentStepIndex > 0,
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = if (currentStepIndex > 0) 0.2f else 0.05f)),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Sebelumnya",
+                                    tint = if (currentStepIndex > 0) Color.White else Color.White.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            IconButton(
+                                onClick = { if (currentStepIndex < steps.size - 1) currentStepIndex++ },
+                                enabled = currentStepIndex < steps.size - 1,
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = if (currentStepIndex < steps.size - 1) 0.2f else 0.05f)),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "Berikutnya",
+                                    tint = if (currentStepIndex < steps.size - 1) Color.White else Color.White.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Sub-Box "Then" jika ada langkah rute selanjutnya
+                if (nextStep != null) {
+                    Surface(
+                        shape = RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp),
+                        color = Color(0xFF093D30), // Hijau lebih gelap untuk sub-maneuver
+                        shadowElevation = 4.dp,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text(
-                                text = "•  ${route.durationText} (${route.distanceText})",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFFB7E4C7),
+                                text = "Then",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.9f),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            ManeuverIcon(
+                                maneuver = nextStep.maneuver,
+                                modifier = Modifier.size(16.dp),
                             )
                         }
-                        Text(
-                            text = currentStep?.instruction ?: "Ikuti rute ke ${selectedPlace?.name ?: route.endAddress}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.9f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
                     }
+                }
+            }
 
-                    Spacer(Modifier.width(8.dp))
+            // 2. KARTU STATUS PERJALANAN / ETA PILL (Pojok Kiri Bawah ala Android Auto)
+            val etaTimeText = remember(route.durationSeconds) {
+                try {
+                    LocalTime.now()
+                        .plusSeconds(route.durationSeconds)
+                        .format(DateTimeFormatter.ofPattern("HH:mm"))
+                } catch (e: Exception) {
+                    ""
+                }
+            }
 
-                    // Tombol Navigasi Langkah Rute (berguna terutama jika headunit tanpa GPS)
-                    if (steps.size > 1) {
-                        IconButton(
-                            onClick = { if (currentStepIndex > 0) currentStepIndex-- },
-                            enabled = currentStepIndex > 0,
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = if (currentStepIndex > 0) 0.18f else 0.06f)),
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Langkah Sebelumnya",
-                                tint = if (currentStepIndex > 0) Color.White else Color.White.copy(alpha = 0.35f),
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                        Spacer(Modifier.width(6.dp))
-                        IconButton(
-                            onClick = { if (currentStepIndex < steps.size - 1) currentStepIndex++ },
-                            enabled = currentStepIndex < steps.size - 1,
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = if (currentStepIndex < steps.size - 1) 0.18f else 0.06f)),
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = "Langkah Berikutnya",
-                                tint = if (currentStepIndex < steps.size - 1) Color.White else Color.White.copy(alpha = 0.35f),
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                        Spacer(Modifier.width(6.dp))
-                    }
-
-                    // Tombol Keluar Navigasi (X Elegan)
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 14.dp, bottom = 14.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF1E2124).copy(alpha = 0.94f), // Hitam transparan Android Auto
+                shadowElevation = 8.dp,
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    Color.White.copy(alpha = 0.12f),
+                ),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    // Tombol Keluar Navigasi (✕)
                     IconButton(
                         onClick = { isNavigating = false },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.2f)),
+                        modifier = Modifier.size(24.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Keluar Navigasi",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp),
+                            tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+
+                    // Durasi waktu sisa (Hijau cerah khas Android Auto ETA)
+                    Text(
+                        text = route.durationText,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2DD36F),
+                    )
+
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.5f),
+                    )
+
+                    // Jarak sisa
+                    Text(
+                        text = route.distanceText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                    )
+
+                    if (etaTimeText.isNotBlank()) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.5f),
+                        )
+
+                        // Jam perkiraan tiba
+                        Text(
+                            text = etaTimeText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.85f),
                         )
                     }
                 }
@@ -935,34 +1033,84 @@ private fun ManeuverIcon(maneuver: String?, modifier: Modifier = Modifier) {
 }
 
 /**
- * Styling malam (Dark Mode) untuk Google Maps SDK.
+ * Styling malam (Dark Mode) untuk Google Maps SDK yang serasi dengan Android Auto Coolwalk.
  */
 private fun applyGoogleMapDarkStyle(context: Context, map: GoogleMap) {
     val darkJson = """
     [
-      { "elementType": "geometry", "stylers": [{ "color": "#242f3e" }] },
-      { "elementType": "labels.text.stroke", "stylers": [{ "color": "#242f3e" }] },
-      { "elementType": "labels.text.fill", "stylers": [{ "color": "#746855" }] },
-      { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
-      { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
-      { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#263c3f" }] },
-      { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#6b9a76" }] },
-      { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] },
-      { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212a37" }] },
-      { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b3" }] },
-      { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#746855" }] },
-      { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1f2835" }] },
-      { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#f3d19c" }] },
-      { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#2f3948" }] },
-      { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
-      { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] },
-      { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#515c6d" }] },
-      { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#17263c" }] }
+      { "elementType": "geometry", "stylers": [{ "color": "#18222d" }] },
+      { "elementType": "labels.text.stroke", "stylers": [{ "color": "#18222d" }] },
+      { "elementType": "labels.text.fill", "stylers": [{ "color": "#8c9ba5" }] },
+      { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#c4d1db" }] },
+      { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#8c9ba5" }] },
+      { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#1a2c30" }] },
+      { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#5b8c74" }] },
+      { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#283747" }] },
+      { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e2a36" }] },
+      { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
+      { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#33475b" }] },
+      { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#202e3b" }] },
+      { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#cbd5e1" }] },
+      { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#223243" }] },
+      { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
+      { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#101923" }] },
+      { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#516375" }] },
+      { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#101923" }] }
     ]
     """.trimIndent()
     try {
         map.setMapStyle(MapStyleOptions(darkJson))
     } catch (e: Exception) {}
+}
+
+/**
+ * Membuat icon navigasi resmi Android Auto: Lingkaran biru dengan panah segitiga putih.
+ */
+private fun createNavArrowBitmap(context: Context): BitmapDescriptor {
+    val density = context.resources.displayMetrics.density
+    val sizePx = (42 * density).toInt()
+    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    val center = sizePx / 2f
+    val strokeWidth = 2.5f * density
+    val radius = center - strokeWidth
+
+    // Lingkaran luar biru Google Android Auto
+    val paintCircle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.parseColor("#1A73E8")
+        style = Paint.Style.FILL
+    }
+    // Border putih
+    val paintBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        style = Paint.Style.STROKE
+        this.strokeWidth = strokeWidth
+    }
+    canvas.drawCircle(center, center, radius, paintCircle)
+    canvas.drawCircle(center, center, radius, paintBorder)
+
+    // Panah segitiga putih tajam di tengah
+    val paintArrow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        style = Paint.Style.FILL
+    }
+    val path = Path().apply {
+        val top = center - radius * 0.62f
+        val bottom = center + radius * 0.50f
+        val left = center - radius * 0.50f
+        val right = center + radius * 0.50f
+        val indent = center + radius * 0.22f
+
+        moveTo(center, top)
+        lineTo(right, bottom)
+        lineTo(center, indent)
+        lineTo(left, bottom)
+        close()
+    }
+    canvas.drawPath(path, paintArrow)
+
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
 /**
