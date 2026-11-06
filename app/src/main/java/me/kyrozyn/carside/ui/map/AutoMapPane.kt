@@ -166,24 +166,29 @@ fun AutoMapPane(
         }
     }
 
-    // Kamera mengikuti lokasi GPS
-    LaunchedEffect(googleMap, userLocation) {
+    // Kamera mengikuti lokasi GPS (posisi kendaraan selalu berada di bagian bawah layar)
+    LaunchedEffect(googleMap, userLocation, isNavigating, bearing) {
         val map = googleMap ?: return@LaunchedEffect
         val loc = userLocation ?: return@LaunchedEffect
         val latLng = LatLng(loc.latitude, loc.longitude)
 
         if (!isNavigating && activeRoute == null) {
-            val cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 16f)
-            map.animateCamera(cameraUpdate)
-        } else if (isNavigating) {
-            // Dalam mode navigasi: kamera menghadap arah kendaraan
             val cameraPosition = CameraPosition.Builder()
                 .target(latLng)
-                .zoom(17.5f)
+                .zoom(16.5f)
                 .bearing(bearing)
-                .tilt(45f)
+                .tilt(if (bearing > 0f) 25f else 0f)
                 .build()
-            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000, null)
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 800, null)
+        } else if (isNavigating) {
+            // Dalam mode navigasi: kamera menghadap arah kendaraan (3D driving view)
+            val cameraPosition = CameraPosition.Builder()
+                .target(latLng)
+                .zoom(17.8f)
+                .bearing(bearing)
+                .tilt(48f)
+                .build()
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 800, null)
         }
     }
 
@@ -232,6 +237,14 @@ fun AutoMapPane(
         AndroidView(
             factory = {
                 mapViewInstance = mapView
+                mapView.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
+                    val h = bottom - top
+                    if (h > 0) {
+                        // Top padding ~54% memposisikan mobil di ~77% dari atas (bagian bawah layar seperti Google Maps)
+                        val topPadding = (h * 0.54f).toInt()
+                        googleMap?.setPadding(0, topPadding, 0, 0)
+                    }
+                }
                 mapView.getMapAsync { map ->
                     googleMap = map
                     map.uiSettings.isCompassEnabled = true
@@ -239,6 +252,12 @@ fun AutoMapPane(
                     map.uiSettings.isMyLocationButtonEnabled = false
                     map.isTrafficEnabled = isTrafficEnabled
                     map.mapType = mapType
+
+                    val h = mapView.height
+                    if (h > 0) {
+                        val topPadding = (h * 0.54f).toInt()
+                        map.setPadding(0, topPadding, 0, 0)
+                    }
 
                     if (hasLocationPermission) {
                         try {
@@ -257,7 +276,13 @@ fun AutoMapPane(
                     } else {
                         LatLng(-6.1754, 106.8272)
                     }
-                    map.moveCamera(CameraUpdateFactory.newLatLngZoom(startPos, 15f))
+                    val initialCamera = CameraPosition.Builder()
+                        .target(startPos)
+                        .zoom(16.5f)
+                        .bearing(bearing)
+                        .tilt(if (bearing > 0f) 25f else 0f)
+                        .build()
+                    map.moveCamera(CameraUpdateFactory.newCameraPosition(initialCamera))
                 }
                 mapView
             },
@@ -266,51 +291,18 @@ fun AutoMapPane(
 
         // ── TOP BAR: Pencarian Android Auto & Kategori Cepat ───────────
         if (!isNavigating) {
-            Column(
+            // Bar Pencarian Floating (start = 124.dp agar sejajar di kanan tombol Apps & Settings tanpa tabrakan)
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .padding(start = 124.dp, top = 12.dp, end = 12.dp),
             ) {
-                // Warning jika API Key belum diisi
-                if (apiKey.isNullOrBlank()) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp)
-                            .clickable { onOpenSettings() },
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.95f),
-                        shadowElevation = 3.dp,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text(
-                                text = "Mode Auto aktif. Masukkan Google Maps API Key di Pengaturan.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Button(
-                                onClick = onOpenSettings,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.tertiary,
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                            ) {
-                                Text("Pengaturan", fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
-
-                // Bar Pencarian Floating
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                     shadowElevation = 6.dp,
                     border = androidx.compose.foundation.BorderStroke(
@@ -320,15 +312,15 @@ fun AutoMapPane(
                 ) {
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 4.dp),
+                            .fillMaxSize()
+                            .padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Cari",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(22.dp),
                         )
                         Spacer(Modifier.width(10.dp))
                         OutlinedTextField(
@@ -350,7 +342,14 @@ fun AutoMapPane(
                                     searchResults = emptyList()
                                 }
                             },
-                            placeholder = { Text("Cari tempat atau alamat...") },
+                            placeholder = {
+                                Text(
+                                    "Cari tempat atau alamat...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -364,23 +363,62 @@ fun AutoMapPane(
                                     searchQuery = ""
                                     searchResults = emptyList()
                                 },
+                                modifier = Modifier.size(32.dp),
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Hapus",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
                                 )
                             }
                         }
                     }
                 }
+            }
 
-                // Chips Kategori Cepat (SPBU, Restoran, Parkir, Kafe)
+            // Warning jika API Key belum diisi (diletakkan di bawah tombol atas)
+            if (apiKey.isNullOrBlank()) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, top = 68.dp, end = 12.dp)
+                        .clickable { onOpenSettings() },
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.95f),
+                    shadowElevation = 4.dp,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "Mode Auto aktif. Masukkan Google Maps API Key di Pengaturan.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Button(
+                            onClick = onOpenSettings,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiary,
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                        ) {
+                            Text("Pengaturan", fontSize = 12.sp)
+                        }
+                    }
+                }
+            } else {
+                // Chips Kategori Cepat (SPBU, Restoran, Parkir, Kafe) di bawah baris tombol atas
                 Row(
                     modifier = Modifier
+                        .align(Alignment.TopStart)
                         .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(top = 8.dp),
+                        .padding(start = 12.dp, top = 68.dp, end = 12.dp)
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     QuickCategoryChip("⛽ SPBU") {
@@ -416,83 +454,90 @@ fun AutoMapPane(
                         }
                     }
                 }
+            }
 
-                // Hasil Pencarian Floating
-                AnimatedVisibility(
-                    visible = searchResults.isNotEmpty() || isSearching,
-                    enter = fadeIn() + slideInVertically(),
-                    exit = fadeOut() + slideOutVertically(),
+            // Hasil Pencarian Floating
+            AnimatedVisibility(
+                visible = searchResults.isNotEmpty() || isSearching,
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically(),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, top = 114.dp, end = 12.dp),
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 240.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                    shadowElevation = 8.dp,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                    ),
                 ) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
-                            .heightIn(max = 240.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-                        shadowElevation = 8.dp,
-                    ) {
-                        if (isSearching) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                            }
-                        } else {
-                            LazyColumn {
-                                items(searchResults) { place ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                selectedPlace = place
-                                                searchResults = emptyList()
-                                                searchQuery = place.name
-                                                // Minta rute ke tempat ini
-                                                if (userLocation != null) {
-                                                    isCalculatingRoute = true
-                                                    coroutineScope.launch {
-                                                        activeRoute = GoogleMapsHelper.getDirections(
-                                                            LatLng(userLocation.latitude, userLocation.longitude),
-                                                            place.latLng,
-                                                            apiKey,
-                                                        )
-                                                        isCalculatingRoute = false
-                                                    }
+                    if (isSearching) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                        }
+                    } else {
+                        LazyColumn {
+                            items(searchResults) { place ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedPlace = place
+                                            searchResults = emptyList()
+                                            searchQuery = place.name
+                                            // Minta rute ke tempat ini
+                                            if (userLocation != null) {
+                                                isCalculatingRoute = true
+                                                coroutineScope.launch {
+                                                    activeRoute = GoogleMapsHelper.getDirections(
+                                                        LatLng(userLocation.latitude, userLocation.longitude),
+                                                        place.latLng,
+                                                        apiKey,
+                                                    )
+                                                    isCalculatingRoute = false
                                                 }
                                             }
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Place,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(22.dp),
-                                        )
-                                        Spacer(Modifier.width(12.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = place.name,
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Text(
-                                                text = place.address,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
                                         }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Place,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp),
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = place.name,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = place.address,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
                                     }
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                                 }
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                             }
                         }
                     }
@@ -513,12 +558,13 @@ fun AutoMapPane(
                 contentDescription = "Pusatkan Lokasi",
             ) {
                 if (userLocation != null && googleMap != null) {
-                    googleMap?.animateCamera(
-                        CameraUpdateFactory.newLatLngZoom(
-                            LatLng(userLocation.latitude, userLocation.longitude),
-                            16f,
-                        ),
-                    )
+                    val cameraPosition = CameraPosition.Builder()
+                        .target(LatLng(userLocation.latitude, userLocation.longitude))
+                        .zoom(if (isNavigating) 17.8f else 16.5f)
+                        .bearing(bearing)
+                        .tilt(if (isNavigating) 48f else 25f)
+                        .build()
+                    googleMap?.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
                 }
             }
 
@@ -671,107 +717,88 @@ fun AutoMapPane(
             }
         }
 
-        // ── MODE NAVIGASI AKTIF: Turn-by-Turn Banner & Bottom Bar ───────
+        // ── MODE NAVIGASI AKTIF: Turn-by-Turn Banner di Atas (Bawah Layar Bersih) ──
         if (isNavigating && activeRoute != null) {
             val route = activeRoute!!
             val firstStep = route.steps.firstOrNull()
 
-            // Banner Navigasi Hijau/Gelap (Android Auto Turn Banner) di Kiri Atas
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(14.dp)
-                    .fillMaxWidth(0.85f),
-                shape = RoundedCornerShape(20.dp),
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, top = 68.dp, end = 12.dp),
+                shape = RoundedCornerShape(22.dp),
                 color = Color(0xFF0F5132), // Emerald Navigation Green
-                shadowElevation = 8.dp,
+                shadowElevation = 10.dp,
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    Color(0xFF28724D),
+                ),
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // Icon Manuver
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
                             .background(Color.White.copy(alpha = 0.2f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         ManeuverIcon(
                             maneuver = firstStep?.maneuver,
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier.size(26.dp),
                         )
                     }
-                    Spacer(Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = firstStep?.distanceText?.ifBlank { "Dalam 200 m" } ?: "Dalam 200 m",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                        )
-                        Text(
-                            text = firstStep?.instruction ?: "Ikuti rute di peta",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.9f),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
 
-            // Bottom Bar Navigasi (ETA, Jarak, Tombol Keluar)
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                shadowElevation = 8.dp,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column {
+                    Spacer(Modifier.width(12.dp))
+
+                    // Detail Manuver, ETA & Jarak
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = route.durationText,
-                                style = MaterialTheme.typography.titleLarge,
+                                text = firstStep?.distanceText?.ifBlank { "Dalam 200 m" } ?: "Dalam 200 m",
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = Color.White,
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "•  ${route.distanceText}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                text = "•  ${route.durationText} (${route.distanceText})",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFB7E4C7),
                             )
                         }
                         Text(
-                            text = "Menuju: ${selectedPlace?.name ?: route.endAddress}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = firstStep?.instruction ?: "Ikuti rute ke ${selectedPlace?.name ?: route.endAddress}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.9f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
 
-                    OutlinedButton(
-                        onClick = {
-                            isNavigating = false
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        ),
+                    Spacer(Modifier.width(8.dp))
+
+                    // Tombol Keluar Navigasi (X Elegan)
+                    IconButton(
+                        onClick = { isNavigating = false },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.2f)),
                     ) {
-                        Text("Keluar")
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Keluar Navigasi",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                 }
             }
