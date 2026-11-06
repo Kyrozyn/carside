@@ -135,7 +135,6 @@ fun AutoMapPane(
 
     // Markers & Polylines references
     var destinationMarker by remember { mutableStateOf<Marker?>(null) }
-    var userNavMarker by remember { mutableStateOf<Marker?>(null) }
     var routePolyline by remember { mutableStateOf<Polyline?>(null) }
 
     // Terapkan API Key ke metadata
@@ -218,19 +217,6 @@ fun AutoMapPane(
                 .tilt(55f) // Sudut 3D perspektif mengemudi
                 .build()
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000, null)
-
-            // Tampilkan marker kendaraan di posisi rute/navigasi
-            userNavMarker?.remove()
-            val markerOptions = MarkerOptions()
-                .position(navTarget)
-                .title("Kendaraan")
-                .rotation(effectiveBearing)
-                .flat(true)
-                .anchor(0.5f, 0.5f)
-            userNavMarker = map.addMarker(markerOptions)
-        } else if (!isNavigating) {
-            userNavMarker?.remove()
-            userNavMarker = null
         }
     }
 
