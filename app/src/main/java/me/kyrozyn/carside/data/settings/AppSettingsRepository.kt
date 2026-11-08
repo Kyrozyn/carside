@@ -67,7 +67,8 @@ class AppSettingsRepository(context: Context) {
     val autoMapEngine: StateFlow<AutoMapEngine> = _autoMapEngine.asStateFlow()
 
     private val _googleMapsApiKey = MutableStateFlow(
-        prefs.getString(KEY_GOOGLE_MAPS_API_KEY, null),
+        prefs.getString(KEY_GOOGLE_MAPS_API_KEY, null)?.ifBlank { null }
+            ?: me.kyrozyn.carside.core.GoogleMapsHelper.getApiKey(context),
     )
     val googleMapsApiKey: StateFlow<String?> = _googleMapsApiKey.asStateFlow()
 
@@ -85,9 +86,11 @@ class AppSettingsRepository(context: Context) {
 
     fun setGoogleMapsApiKey(apiKey: String?) {
         val trimmed = apiKey?.trim()?.ifBlank { null }
-        if (_googleMapsApiKey.value == trimmed) return
-        _googleMapsApiKey.value = trimmed
+        val effective = trimmed ?: me.kyrozyn.carside.core.GoogleMapsHelper.getApiKey(context)
+        if (_googleMapsApiKey.value == effective) return
+        _googleMapsApiKey.value = effective
         prefs.edit().putString(KEY_GOOGLE_MAPS_API_KEY, trimmed).apply()
+        me.kyrozyn.carside.core.GoogleMapsHelper.applyApiKey(context, effective)
     }
 
     fun setCustomBluetoothMusic(packageName: String?, activityName: String?) {

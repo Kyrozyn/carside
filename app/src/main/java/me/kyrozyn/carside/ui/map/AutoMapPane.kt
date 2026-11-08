@@ -311,6 +311,7 @@ fun AutoMapPane(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val isDark = isSystemInDarkTheme()
+    val effectiveApiKey = apiKey?.ifBlank { null } ?: remember(context) { GoogleMapsHelper.getApiKey(context) }
 
     // Sesi navigasi terpusat (persisten saat navigasi antar halaman)
     val fallbackNavState = remember { MutableStateFlow(AutoNavState()) }
@@ -376,7 +377,7 @@ fun AutoMapPane(
                 val newRoutes = GoogleMapsHelper.getRoutes(
                     GmsLatLng(userLocation.latitude, userLocation.longitude),
                     selectedPlace.latLng,
-                    apiKey,
+                    effectiveApiKey,
                 )
                 if (newRoutes.isNotEmpty()) {
                     autoNavigationManager?.updateReroutedNavigation(newRoutes)
@@ -507,7 +508,7 @@ fun AutoMapPane(
                                             context,
                                             query,
                                             userLocation,
-                                            apiKey,
+                                            effectiveApiKey,
                                         )
                                         isSearching = false
                                     }
@@ -551,7 +552,7 @@ fun AutoMapPane(
             }
 
             // Banner pemberitahuan jika API Key belum diisi
-            if (apiKey.isNullOrBlank()) {
+            if (effectiveApiKey.isNullOrBlank()) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -598,7 +599,7 @@ fun AutoMapPane(
                         searchQuery = "SPBU terdekat"
                         coroutineScope.launch {
                             isSearching = true
-                            searchResults = GoogleMapsHelper.searchPlaces(context, "SPBU", userLocation, apiKey)
+                            searchResults = GoogleMapsHelper.searchPlaces(context, "SPBU", userLocation, effectiveApiKey)
                             isSearching = false
                         }
                     }
@@ -606,7 +607,7 @@ fun AutoMapPane(
                         searchQuery = "Restoran terdekat"
                         coroutineScope.launch {
                             isSearching = true
-                            searchResults = GoogleMapsHelper.searchPlaces(context, "Restoran", userLocation, apiKey)
+                            searchResults = GoogleMapsHelper.searchPlaces(context, "Restoran", userLocation, effectiveApiKey)
                             isSearching = false
                         }
                     }
@@ -614,7 +615,7 @@ fun AutoMapPane(
                         searchQuery = "Tempat parkir"
                         coroutineScope.launch {
                             isSearching = true
-                            searchResults = GoogleMapsHelper.searchPlaces(context, "Parkir", userLocation, apiKey)
+                            searchResults = GoogleMapsHelper.searchPlaces(context, "Parkir", userLocation, effectiveApiKey)
                             isSearching = false
                         }
                     }
@@ -622,7 +623,7 @@ fun AutoMapPane(
                         searchQuery = "Kafe terdekat"
                         coroutineScope.launch {
                             isSearching = true
-                            searchResults = GoogleMapsHelper.searchPlaces(context, "Kafe", userLocation, apiKey)
+                            searchResults = GoogleMapsHelper.searchPlaces(context, "Kafe", userLocation, effectiveApiKey)
                             isSearching = false
                         }
                     }
@@ -677,7 +678,7 @@ fun AutoMapPane(
                                                 val routes = GoogleMapsHelper.getRoutes(
                                                     startLatLng,
                                                     place.latLng,
-                                                    apiKey,
+                                                    effectiveApiKey,
                                                 )
                                                 autoNavigationManager?.setPreviewRoutes(place, routes)
                                                 isCalculatingRoute = false
@@ -955,7 +956,7 @@ fun AutoMapPane(
                                     val routes = GoogleMapsHelper.getRoutes(
                                         startLatLng,
                                         place.latLng,
-                                        apiKey,
+                                        effectiveApiKey,
                                     )
                                     autoNavigationManager?.setPreviewRoutes(place, routes)
                                     isCalculatingRoute = false
