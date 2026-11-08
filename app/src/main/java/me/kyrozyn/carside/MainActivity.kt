@@ -311,6 +311,7 @@ class MainActivity : ComponentActivity() {
                         locationDotSize = locationDotSize,
                         locationRefreshIntervalMs = locationRefreshIntervalMs,
                         autoNavigationManager = container.autoNavigationManager,
+                        onSwitchToMapLibre = { vm.setAutoMapEngine(me.kyrozyn.carside.data.settings.AutoMapEngine.MAPLIBRE) },
                     )
                 }
             }

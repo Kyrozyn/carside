@@ -107,6 +107,7 @@ fun DashboardScreen(
     locationDotSize: Float = 60f,
     locationRefreshIntervalMs: Long = 60_000L,
     autoNavigationManager: AutoNavigationManager? = null,
+    onSwitchToMapLibre: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -170,7 +171,7 @@ fun DashboardScreen(
                             autoMapEngine = uiState.autoMapEngine,
                             autoNavigationManager = autoNavigationManager,
                             onOpenSettings = onOpenSettings,
-                            onSwitchToMapLibre = { viewModel.setAutoMapEngine(me.kyrozyn.carside.data.settings.AutoMapEngine.MAPLIBRE) },
+                            onSwitchToMapLibre = onSwitchToMapLibre,
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
