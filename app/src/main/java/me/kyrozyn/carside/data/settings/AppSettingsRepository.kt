@@ -9,7 +9,7 @@ import me.kyrozyn.carside.ui.theme.AppThemePalette
 import org.json.JSONArray
 import org.json.JSONObject
 
-class AppSettingsRepository(context: Context) {
+class AppSettingsRepository(private val context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val _useGpsForwardMapBearing = MutableStateFlow(
         prefs.getBoolean(KEY_USE_GPS_FORWARD_MAP_BEARING, false),
