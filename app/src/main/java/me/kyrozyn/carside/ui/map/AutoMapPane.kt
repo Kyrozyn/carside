@@ -129,6 +129,8 @@ import org.maplibre.geojson.Point
 
 private const val SOURCE_ACTIVE_ROUTE = "auto-active-route-source"
 private const val LAYER_ACTIVE_ROUTE = "auto-active-route-layer"
+private const val SOURCE_PASSED_ROUTE = "auto-passed-route-source"
+private const val LAYER_PASSED_ROUTE = "auto-passed-route-layer"
 private const val SOURCE_ALT_ROUTE_PREFIX = "auto-alt-route-source-"
 private const val LAYER_ALT_ROUTE_PREFIX = "auto-alt-route-layer-"
 private const val SOURCE_VEHICLE = "auto-vehicle-source"
@@ -319,11 +321,13 @@ fun AutoMapPane(
     val selectedRouteIndex = navState.selectedRouteIndex
     val activeRoute = navState.activeRoute
     val currentStepIndex = navState.currentStepIndex
+    val passedPointIndex = navState.passedPointIndex
 
     // Map controls & state
     var isTrafficEnabled by remember { mutableStateOf(true) }
     var isSatellite by remember { mutableStateOf(false) }
     var recenterTrigger by remember { mutableStateOf(0L) }
+    var lastRerouteAtMs by remember { mutableStateOf(0L) }
 
     // Search state
     var searchQuery by remember { mutableStateOf("") }
@@ -334,17 +338,73 @@ fun AutoMapPane(
     // Koordinat tengah kamera terakhir untuk fallback pencarian rute
     var cameraCenterTarget by remember { mutableStateOf<GmsLatLng?>(null) }
 
-    // Hitung arah hadap kendaraan (heading) yang efektif
-    val effectiveBearing = remember(isNavigating, activeRoute, currentStepIndex, bearing) {
+    // Hitung progres rute dinamis saat navigasi berjalan
+    val routeProgress = remember(isNavigating, activeRoute, userLocation, currentStepIndex, passedPointIndex) {
         if (isNavigating && activeRoute != null) {
-            val steps = activeRoute.steps
-            val routeHeading = if (currentStepIndex < steps.size - 1 && steps.isNotEmpty()) {
-                val from = steps[currentStepIndex].latLng
-                val to = steps[currentStepIndex + 1].latLng
-                calculateBearing(from.latitude, from.longitude, to.latitude, to.longitude)
-            } else {
-                calculateInitialRouteBearing(activeRoute.points)
+            computeRouteProgress(
+                route = activeRoute,
+                userLocation = userLocation,
+                currentStepIndex = currentStepIndex,
+                passedPointIndex = passedPointIndex,
+            )
+        } else null
+    }
+
+    // Sinkronkan progres titik polyline & step secara otomatis ketika posisi GPS maju,
+    // hentikan navigasi bila sudah sampai di tujuan (< 20m), serta reroute bila keluar jalur (> 85m).
+    LaunchedEffect(isNavigating, activeRoute, userLocation, routeProgress) {
+        val progress = routeProgress ?: return@LaunchedEffect
+        val route = activeRoute ?: return@LaunchedEffect
+        if (userLocation != null) {
+            if (progress.remainingDistanceMeters < 20.0 && (progress.segmentIndex > 0 || route.distanceMeters <= 40L)) {
+                android.widget.Toast.makeText(context, "Anda telah tiba di tujuan", android.widget.Toast.LENGTH_SHORT).show()
+                autoNavigationManager?.stopNavigation()
+                return@LaunchedEffect
             }
+            autoNavigationManager?.updateProgress(
+                passedPointIndex = progress.segmentIndex,
+                stepIndex = progress.stepIndex,
+            )
+            val now = System.currentTimeMillis()
+            if (
+                progress.offRouteDistanceMeters > 85.0 &&
+                selectedPlace != null &&
+                now - lastRerouteAtMs > 15_000L &&
+                !isCalculatingRoute
+            ) {
+                lastRerouteAtMs = now
+                val newRoutes = GoogleMapsHelper.getRoutes(
+                    GmsLatLng(userLocation.latitude, userLocation.longitude),
+                    selectedPlace.latLng,
+                    apiKey,
+                )
+                if (newRoutes.isNotEmpty()) {
+                    autoNavigationManager?.updateReroutedNavigation(newRoutes)
+                }
+            }
+        }
+    }
+
+    val remainingRoutePoints = remember(isNavigating, activeRoute, routeProgress) {
+        if (isNavigating && routeProgress != null) {
+            routeProgress.remainingPoints
+        } else {
+            activeRoute?.points.orEmpty()
+        }
+    }
+
+    val passedRoutePoints = remember(isNavigating, routeProgress) {
+        if (isNavigating && routeProgress != null) {
+            routeProgress.passedPoints
+        } else {
+            emptyList()
+        }
+    }
+
+    // Hitung arah hadap kendaraan (heading) yang efektif
+    val effectiveBearing = remember(isNavigating, activeRoute, routeProgress, bearing) {
+        if (isNavigating && activeRoute != null) {
+            val routeHeading = routeProgress?.segmentBearing ?: calculateInitialRouteBearing(activeRoute.points)
             if (bearing > 0f) bearing else routeHeading
         } else {
             bearing
@@ -368,6 +428,8 @@ fun AutoMapPane(
                 availableRoutes = availableRoutes,
                 selectedRouteIndex = selectedRouteIndex,
                 activeRoute = activeRoute,
+                remainingRoutePoints = remainingRoutePoints,
+                passedRoutePoints = passedRoutePoints,
                 currentStepIndex = currentStepIndex,
                 isTrafficEnabled = isTrafficEnabled,
                 isSatellite = isSatellite,
@@ -389,6 +451,8 @@ fun AutoMapPane(
                 availableRoutes = availableRoutes,
                 selectedRouteIndex = selectedRouteIndex,
                 activeRoute = activeRoute,
+                remainingRoutePoints = remainingRoutePoints,
+                passedRoutePoints = passedRoutePoints,
                 currentStepIndex = currentStepIndex,
                 isTrafficEnabled = isTrafficEnabled,
                 isSatellite = isSatellite,
@@ -913,8 +977,23 @@ fun AutoMapPane(
         if (isNavigating && activeRoute != null) {
             val route = activeRoute
             val steps = route.steps
-            val currentStep = steps.getOrNull(currentStepIndex) ?: steps.firstOrNull()
-            val nextStep = steps.getOrNull(currentStepIndex + 1)
+            val activeSegStepIndex = routeProgress?.stepIndex ?: currentStepIndex
+            // Pada Google Directions API, saat kendaraan berada di segmen jalan ke-s (antara start..end step[s]),
+            // manuver belok yang akan dihadapi di ujung segmen ini adalah step[s + 1] (kecuali sudah di segmen terakhir).
+            val displayStepIndex = if (steps.size > 1 && activeSegStepIndex < steps.lastIndex) {
+                activeSegStepIndex + 1
+            } else {
+                activeSegStepIndex
+            }
+            val currentStep = steps.getOrNull(displayStepIndex) ?: steps.firstOrNull()
+            val nextStep = steps.getOrNull(displayStepIndex + 1)
+            val stepDistanceText = routeProgress?.let { formatDistanceMeters(it.distanceToManeuverMeters) }
+                ?: currentStep?.distanceText.orEmpty()
+            val dynamicDurationSeconds = routeProgress?.remainingDurationSeconds ?: route.durationSeconds
+            val dynamicDurationText = routeProgress?.let { formatDurationSeconds(it.remainingDurationSeconds) }
+                ?: route.durationText
+            val dynamicDistanceText = routeProgress?.let { formatDistanceMeters(it.remainingDistanceMeters) }
+                ?: route.distanceText
 
             // 1. KARTU MANUVER HIJAU (Pojok Kiri Atas ala Android Auto)
             Column(
@@ -939,6 +1018,7 @@ fun AutoMapPane(
                     ) {
                         ManeuverIcon(
                             maneuver = currentStep?.maneuver,
+                            instruction = currentStep?.instruction,
                             modifier = Modifier.size(28.dp),
                         )
                         Spacer(Modifier.width(12.dp))
@@ -951,9 +1031,9 @@ fun AutoMapPane(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            if (!currentStep?.distanceText.isNullOrBlank()) {
+                            if (stepDistanceText.isNotBlank()) {
                                 Text(
-                                    text = currentStep?.distanceText.orEmpty(),
+                                    text = stepDistanceText,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color.White.copy(alpha = 0.85f),
                                 )
@@ -1018,6 +1098,7 @@ fun AutoMapPane(
                             Spacer(Modifier.width(6.dp))
                             ManeuverIcon(
                                 maneuver = nextStep.maneuver,
+                                instruction = nextStep.instruction,
                                 modifier = Modifier.size(16.dp),
                             )
                         }
@@ -1026,10 +1107,10 @@ fun AutoMapPane(
             }
 
             // 2. KARTU STATUS PERJALANAN / ETA PILL (Pojok Kiri Bawah ala Android Auto)
-            val etaTimeText = remember(route.durationSeconds) {
+            val etaTimeText = remember(dynamicDurationSeconds, userLocation) {
                 try {
                     LocalTime.now()
-                        .plusSeconds(route.durationSeconds)
+                        .plusSeconds(dynamicDurationSeconds)
                         .format(DateTimeFormatter.ofPattern("HH:mm"))
                 } catch (e: Exception) {
                     ""
@@ -1066,7 +1147,7 @@ fun AutoMapPane(
                     }
 
                     Text(
-                        text = route.durationText,
+                        text = dynamicDurationText,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2DD36F),
@@ -1079,7 +1160,7 @@ fun AutoMapPane(
                     )
 
                     Text(
-                        text = route.distanceText,
+                        text = dynamicDistanceText,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
@@ -1096,6 +1177,24 @@ fun AutoMapPane(
                             text = etaTimeText,
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.85f),
+                        )
+                    }
+
+                    val destName = selectedPlace?.name ?: route.endAddress
+                    if (destName.isNotBlank()) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.5f),
+                        )
+
+                        Text(
+                            text = destName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.85f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 150.dp),
                         )
                     }
                 }
@@ -1119,6 +1218,8 @@ private fun MapLibreEngine(
     availableRoutes: List<AutoRouteResult>,
     selectedRouteIndex: Int,
     activeRoute: AutoRouteResult?,
+    remainingRoutePoints: List<GmsLatLng>,
+    passedRoutePoints: List<GmsLatLng>,
     currentStepIndex: Int,
     isTrafficEnabled: Boolean,
     isSatellite: Boolean,
@@ -1289,25 +1390,40 @@ private fun MapLibreEngine(
         }
     }
 
-    // Perbarui rute polyline di peta
-    LaunchedEffect(mapRef, isStyleLoaded, availableRoutes, selectedRouteIndex, isNavigating) {
+    // Perbarui garis aktif & garis abu-abu redup yang sudah dilewati saat navigasi
+    LaunchedEffect(mapRef, isStyleLoaded, availableRoutes, selectedRouteIndex, isNavigating, remainingRoutePoints, passedRoutePoints) {
         val map = mapRef ?: return@LaunchedEffect
         if (!isStyleLoaded) return@LaunchedEffect
         val style = map.style ?: return@LaunchedEffect
 
         val activeSource = style.getSource(SOURCE_ACTIVE_ROUTE) as? GeoJsonSource
-        val currentRoute = if (isNavigating) {
-            activeRoute ?: availableRoutes.getOrNull(selectedRouteIndex)
+        val passedSource = style.getSource(SOURCE_PASSED_ROUTE) as? GeoJsonSource
+        val pointsToDraw = if (isNavigating) {
+            remainingRoutePoints
         } else {
-            availableRoutes.getOrNull(selectedRouteIndex)
+            availableRoutes.getOrNull(selectedRouteIndex)?.points.orEmpty()
         }
 
-        if (currentRoute != null && currentRoute.points.isNotEmpty()) {
-            val coords = currentRoute.points.map { Point.fromLngLat(it.longitude, it.latitude) }
+        if (pointsToDraw.size >= 2) {
+            val coords = pointsToDraw.map { Point.fromLngLat(it.longitude, it.latitude) }
             activeSource?.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))
         } else {
             activeSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
         }
+
+        if (isNavigating && passedRoutePoints.size >= 2) {
+            val passedCoords = passedRoutePoints.map { Point.fromLngLat(it.longitude, it.latitude) }
+            passedSource?.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(passedCoords)))
+        } else {
+            passedSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+        }
+    }
+
+    // Perbarui rute alternatif dan zoom out saat pratinjau rute
+    LaunchedEffect(mapRef, isStyleLoaded, availableRoutes, selectedRouteIndex, isNavigating) {
+        val map = mapRef ?: return@LaunchedEffect
+        if (!isStyleLoaded) return@LaunchedEffect
+        val style = map.style ?: return@LaunchedEffect
 
         for (i in 0 until 5) {
             val srcId = "$SOURCE_ALT_ROUTE_PREFIX$i"
@@ -1386,6 +1502,8 @@ private fun GoogleMapsOfficialEngine(
     availableRoutes: List<AutoRouteResult>,
     selectedRouteIndex: Int,
     activeRoute: AutoRouteResult?,
+    remainingRoutePoints: List<GmsLatLng>,
+    passedRoutePoints: List<GmsLatLng>,
     currentStepIndex: Int,
     isTrafficEnabled: Boolean,
     isSatellite: Boolean,
@@ -1400,6 +1518,7 @@ private fun GoogleMapsOfficialEngine(
     val lifecycleOwner = LocalLifecycleOwner.current
     var googleMap by remember { mutableStateOf<GoogleMap?>(null) }
     var routePolylines by remember { mutableStateOf<List<GmsPolyline>>(emptyList()) }
+    var passedRoutePolyline by remember { mutableStateOf<GmsPolyline?>(null) }
     var destinationMarker by remember { mutableStateOf<GmsMarker?>(null) }
     var userNavMarker by remember { mutableStateOf<GmsMarker?>(null) }
 
@@ -1561,6 +1680,8 @@ private fun GoogleMapsOfficialEngine(
         val map = googleMap ?: return@LaunchedEffect
         routePolylines.forEach { it.remove() }
         routePolylines = emptyList()
+        passedRoutePolyline?.remove()
+        passedRoutePolyline = null
         destinationMarker?.remove()
         destinationMarker = null
 
@@ -1577,9 +1698,21 @@ private fun GoogleMapsOfficialEngine(
 
         val newPolylines = mutableListOf<GmsPolyline>()
         if (isNavigating) {
-            val route = activeRoute ?: availableRoutes.getOrNull(selectedRouteIndex) ?: return@LaunchedEffect
+            val initialPts = if (remainingRoutePoints.size >= 2) remainingRoutePoints else (activeRoute ?: availableRoutes.getOrNull(selectedRouteIndex))?.points.orEmpty()
+            if (initialPts.isEmpty()) return@LaunchedEffect
+            val passedOptions = GmsPolylineOptions()
+                .addAll(if (passedRoutePoints.size >= 2) passedRoutePoints else emptyList())
+                .width(14f)
+                .color(AndroidColor.parseColor("#8C80868B"))
+                .startCap(GmsRoundCap())
+                .endCap(GmsRoundCap())
+                .jointType(GmsJointType.ROUND)
+                .geodesic(true)
+                .zIndex(1f)
+            passedRoutePolyline = map.addPolyline(passedOptions)
+
             val polyOptions = GmsPolylineOptions()
-                .addAll(route.points)
+                .addAll(initialPts)
                 .width(16f)
                 .color(AndroidColor.parseColor("#1A73E8"))
                 .startCap(GmsRoundCap())
@@ -1624,6 +1757,14 @@ private fun GoogleMapsOfficialEngine(
             } catch (_: Exception) {}
         }
         routePolylines = newPolylines
+    }
+
+    // Perbarui garis biru (sisa rute) & garis abu-abu redup (sudah dilewati) secara real-time pada Google Maps SDK
+    LaunchedEffect(isNavigating, remainingRoutePoints, passedRoutePoints, routePolylines, passedRoutePolyline) {
+        if (isNavigating && routePolylines.isNotEmpty()) {
+            routePolylines.firstOrNull()?.points = if (remainingRoutePoints.size >= 2) remainingRoutePoints else emptyList()
+            passedRoutePolyline?.points = if (passedRoutePoints.size >= 2) passedRoutePoints else emptyList()
+        }
     }
 
     Box(modifier = modifier) {
@@ -1727,6 +1868,20 @@ private fun setupMapLibreStyleLayers(style: MlStyle, context: Context) {
             )
             style.addLayer(layer)
         }
+    }
+
+    if (style.getSource(SOURCE_PASSED_ROUTE) == null) {
+        style.addSource(GeoJsonSource(SOURCE_PASSED_ROUTE))
+    }
+    if (style.getLayer(LAYER_PASSED_ROUTE) == null) {
+        val layer = LineLayer(LAYER_PASSED_ROUTE, SOURCE_PASSED_ROUTE).withProperties(
+            PropertyFactory.lineColor(AndroidColor.parseColor("#80868B")),
+            PropertyFactory.lineOpacity(0.55f),
+            PropertyFactory.lineWidth(7.5f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        )
+        style.addLayer(layer)
     }
 
     if (style.getSource(SOURCE_ACTIVE_ROUTE) == null) {
@@ -1851,12 +2006,14 @@ private fun FloatingControlIconButton(
 }
 
 @Composable
-private fun ManeuverIcon(maneuver: String?, modifier: Modifier = Modifier) {
+private fun ManeuverIcon(maneuver: String?, instruction: String? = null, modifier: Modifier = Modifier) {
     val m = maneuver?.lowercase() ?: ""
+    val inst = instruction?.lowercase() ?: ""
     val icon = when {
-        m.contains("left") -> Icons.Default.TurnLeft
+        m.contains("left") || m.contains("u-turn") -> Icons.Default.TurnLeft
         m.contains("right") -> Icons.Default.TurnRight
-        m.contains("u-turn") -> Icons.Default.TurnLeft
+        inst.contains("putar balik") || inst.contains("belok kiri") || inst.contains("ambil kiri") || inst.contains("ke kiri") -> Icons.Default.TurnLeft
+        inst.contains("belok kanan") || inst.contains("ambil kanan") || inst.contains("ke kanan") -> Icons.Default.TurnRight
         else -> Icons.AutoMirrored.Filled.ArrowForward
     }
     Icon(
@@ -1996,4 +2153,223 @@ private fun calculateInitialRouteBearing(points: List<GmsLatLng>): Float {
         }
     }
     return calculateBearing(points[0].latitude, points[0].longitude, points[1].latitude, points[1].longitude)
+}
+
+private data class RouteProgressSnapshot(
+    val remainingPoints: List<GmsLatLng>,
+    val passedPoints: List<GmsLatLng>,
+    val segmentIndex: Int,
+    val stepIndex: Int,
+    val distanceToManeuverMeters: Double,
+    val remainingDistanceMeters: Double,
+    val remainingDurationSeconds: Long,
+    val offRouteDistanceMeters: Double,
+    val segmentBearing: Float,
+)
+
+private fun computeRouteProgress(
+    route: AutoRouteResult,
+    userLocation: GeoLocation?,
+    currentStepIndex: Int,
+    passedPointIndex: Int,
+): RouteProgressSnapshot {
+    val points = route.points
+    val steps = route.steps
+    if (points.size < 2) {
+        return RouteProgressSnapshot(
+            remainingPoints = points,
+            passedPoints = emptyList(),
+            segmentIndex = 0,
+            stepIndex = currentStepIndex,
+            distanceToManeuverMeters = steps.getOrNull(currentStepIndex)?.distanceMeters?.toDouble() ?: 0.0,
+            remainingDistanceMeters = route.distanceMeters.toDouble(),
+            remainingDurationSeconds = route.durationSeconds,
+            offRouteDistanceMeters = 0.0,
+            segmentBearing = 0f,
+        )
+    }
+
+    // Jika tidak ada sinyal GPS (misal simulasi manual tombol panah step), potong berdasarkan step saat ini
+    if (userLocation == null) {
+        val safeStepIdx = if (steps.isNotEmpty()) currentStepIndex.coerceIn(0, steps.lastIndex) else 0
+        val startPtIdx = steps.getOrNull(safeStepIdx)?.startPointIndex?.coerceIn(0, points.lastIndex) ?: 0
+        val remPts = points.subList(startPtIdx, points.size)
+        val passedPts = if (startPtIdx > 0) points.subList(0, startPtIdx + 1) else emptyList()
+        val stepDist = steps.getOrNull(safeStepIdx)?.distanceMeters?.toDouble() ?: polylineLengthMeters(remPts)
+        val remDist = if (steps.isNotEmpty()) {
+            (safeStepIdx..steps.lastIndex).sumOf { steps[it].distanceMeters }.toDouble()
+        } else polylineLengthMeters(remPts)
+        val remDur = if (steps.isNotEmpty()) {
+            (safeStepIdx..steps.lastIndex).sumOf { steps[it].durationSeconds }
+        } else route.durationSeconds
+        return RouteProgressSnapshot(
+            remainingPoints = remPts,
+            passedPoints = passedPts,
+            segmentIndex = startPtIdx,
+            stepIndex = safeStepIdx,
+            distanceToManeuverMeters = stepDist,
+            remainingDistanceMeters = remDist,
+            remainingDurationSeconds = remDur,
+            offRouteDistanceMeters = 0.0,
+            segmentBearing = calculateInitialRouteBearing(remPts),
+        )
+    }
+
+    val uLat = userLocation.latitude
+    val uLng = userLocation.longitude
+    val startSearchIdx = passedPointIndex.coerceIn(0, points.lastIndex - 1)
+    val windowEndIdx = (startSearchIdx + 120).coerceAtMost(points.lastIndex - 1)
+
+    var bestIdx = startSearchIdx
+    var bestProjLat = points[startSearchIdx].latitude
+    var bestProjLng = points[startSearchIdx].longitude
+    var bestDist = Double.MAX_VALUE
+
+    fun searchRange(range: IntRange) {
+        for (i in range) {
+            val a = points[i]
+            val b = points[i + 1]
+            val cosLat = kotlin.math.cos(Math.toRadians(uLat)).coerceAtLeast(0.01)
+            val dx = (b.longitude - a.longitude) * cosLat
+            val dy = b.latitude - a.latitude
+            val lenSq = dx * dx + dy * dy
+            val t = if (lenSq > 1e-12) {
+                (((uLng - a.longitude) * cosLat * dx + (uLat - a.latitude) * dy) / lenSq).coerceIn(0.0, 1.0)
+            } else 0.0
+            val projLat = a.latitude + t * (b.latitude - a.latitude)
+            val projLng = a.longitude + t * (b.longitude - a.longitude)
+            val d = distanceMetersBetween(uLat, uLng, projLat, projLng)
+            if (d < bestDist) {
+                bestDist = d
+                bestIdx = i
+                bestProjLat = projLat
+                bestProjLng = projLng
+            }
+        }
+    }
+
+    searchRange(startSearchIdx..windowEndIdx)
+    if (bestDist > 60.0 && windowEndIdx < points.lastIndex - 1) {
+        searchRange((windowEndIdx + 1) until points.lastIndex)
+    }
+
+    val projectedLatLng = GmsLatLng(bestProjLat, bestProjLng)
+    val passedPoints = buildList(bestIdx + 2) {
+        for (k in 0..bestIdx) {
+            add(points[k])
+        }
+        add(projectedLatLng)
+    }
+    val remainingPoints = buildList(points.size - bestIdx) {
+        add(projectedLatLng)
+        for (k in (bestIdx + 1) until points.size) {
+            add(points[k])
+        }
+    }
+
+    // Tentukan step aktif berdasarkan posisi titik pada polyline
+    var activeStepIdx = if (steps.isNotEmpty()) {
+        val found = steps.indexOfFirst { bestIdx < it.endPointIndex }
+        if (found >= 0) found else steps.lastIndex
+    } else 0
+
+    // Jika sudah sangat dekat (< 18 m) dengan titik belok ujung step saat ini, majukan ke step berikutnya
+    if (steps.isNotEmpty() && activeStepIdx < steps.lastIndex) {
+        val stepEnd = steps[activeStepIdx].endLatLng
+        val distToTurn = distanceMetersBetween(uLat, uLng, stepEnd.latitude, stepEnd.longitude)
+        if (distToTurn < 18.0) {
+            activeStepIdx++
+        }
+    }
+
+    // Hitung sisa jarak menuju belokan berikutnya (ujung dari step aktif saat ini)
+    val stepEndPtIdx = steps.getOrNull(activeStepIdx)?.endPointIndex?.coerceIn(bestIdx + 1, points.lastIndex)
+        ?: points.lastIndex
+    var distToManeuver = distanceMetersBetween(
+        projectedLatLng.latitude,
+        projectedLatLng.longitude,
+        points[bestIdx + 1].latitude,
+        points[bestIdx + 1].longitude,
+    )
+    for (k in (bestIdx + 1) until stepEndPtIdx) {
+        distToManeuver += distanceMetersBetween(
+            points[k].latitude,
+            points[k].longitude,
+            points[k + 1].latitude,
+            points[k + 1].longitude,
+        )
+    }
+
+    val remainingDist = polylineLengthMeters(remainingPoints)
+    val remainingDur = if (steps.isNotEmpty()) {
+        val curStep = steps[activeStepIdx]
+        val curFraction = if (curStep.distanceMeters > 0L) {
+            (distToManeuver / curStep.distanceMeters.toDouble()).coerceIn(0.0, 1.0)
+        } else 0.0
+        val curRemSec = (curStep.durationSeconds * curFraction).toLong()
+        val nextSec = ((activeStepIdx + 1)..steps.lastIndex).sumOf { steps[it].durationSeconds }
+        (curRemSec + nextSec).coerceAtLeast(0L)
+    } else if (route.distanceMeters > 0L) {
+        ((remainingDist / route.distanceMeters.toDouble()).coerceIn(0.0, 1.0) * route.durationSeconds).toLong()
+    } else {
+        route.durationSeconds
+    }
+
+    val segBearing = calculateInitialRouteBearing(remainingPoints)
+
+    return RouteProgressSnapshot(
+        remainingPoints = remainingPoints,
+        passedPoints = passedPoints,
+        segmentIndex = bestIdx,
+        stepIndex = activeStepIdx,
+        distanceToManeuverMeters = distToManeuver,
+        remainingDistanceMeters = remainingDist,
+        remainingDurationSeconds = remainingDur,
+        offRouteDistanceMeters = bestDist,
+        segmentBearing = segBearing,
+    )
+}
+
+private fun distanceMetersBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val results = FloatArray(1)
+    android.location.Location.distanceBetween(lat1, lon1, lat2, lon2, results)
+    return results[0].toDouble()
+}
+
+private fun polylineLengthMeters(points: List<GmsLatLng>): Double {
+    if (points.size < 2) return 0.0
+    var total = 0.0
+    for (i in 0 until points.lastIndex) {
+        total += distanceMetersBetween(
+            points[i].latitude,
+            points[i].longitude,
+            points[i + 1].latitude,
+            points[i + 1].longitude,
+        )
+    }
+    return total
+}
+
+private fun formatDistanceMeters(meters: Double): String {
+    val m = meters.coerceAtLeast(0.0)
+    return when {
+        m < 1000.0 -> {
+            val rounded = if (m >= 50.0) ((m / 10.0).toInt() * 10) else m.toInt()
+            "$rounded m"
+        }
+        m < 10_000.0 -> String.format( java.util.Locale("id", "ID"), "%.1f km", m / 1000.0)
+        else -> "${(m / 1000.0).toInt()} km"
+    }
+}
+
+private fun formatDurationSeconds(seconds: Long): String {
+    val sec = seconds.coerceAtLeast(0L)
+    val totalMinutes = ((sec + 30L) / 60L).coerceAtLeast(1L)
+    return if (totalMinutes < 60L) {
+        "$totalMinutes mnt"
+    } else {
+        val hours = totalMinutes / 60L
+        val mins = totalMinutes % 60L
+        if (mins > 0L) "$hours j $mins mnt" else "$hours j"
+    }
 }

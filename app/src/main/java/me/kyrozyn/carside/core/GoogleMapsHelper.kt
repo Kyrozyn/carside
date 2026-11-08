@@ -28,6 +28,11 @@ data class AutoRouteStep(
     val distanceText: String,
     val maneuver: String?,
     val latLng: LatLng,
+    val endLatLng: LatLng = latLng,
+    val distanceMeters: Long = 0L,
+    val durationSeconds: Long = 0L,
+    val startPointIndex: Int = 0,
+    val endPointIndex: Int = 0,
 )
 
 data class AutoRouteResult(
@@ -261,6 +266,7 @@ object GoogleMapsHelper {
                 val endAddr = leg.optString("end_address", "")
 
                 val stepsList = mutableListOf<AutoRouteStep>()
+                val detailedPoints = mutableListOf<LatLng>()
                 val stepsArr = leg.optJSONArray("steps")
                 if (stepsArr != null) {
                     for (s in 0 until stepsArr.length()) {
@@ -269,13 +275,36 @@ object GoogleMapsHelper {
                         val cleanInstruction = rawInstruction
                             .replace("<[^>]*>".toRegex(), " ")
                             .replace("&nbsp;", " ")
+                            .replace("\\s+".toRegex(), " ")
                             .trim()
                         val stepDist = stepObj.optJSONObject("distance")?.optString("text", "") ?: ""
+                        val stepDistMeters = stepObj.optJSONObject("distance")?.optLong("value", 0L) ?: 0L
+                        val stepDurSeconds = stepObj.optJSONObject("duration")?.optLong("value", 0L) ?: 0L
                         val maneuver = stepObj.optString("maneuver").takeIf { it.isNotBlank() }
                         val startLoc = stepObj.optJSONObject("start_location")
                         val stepLatLng = if (startLoc != null) {
                             LatLng(startLoc.optDouble("lat", 0.0), startLoc.optDouble("lng", 0.0))
                         } else LatLng(0.0, 0.0)
+                        val endLoc = stepObj.optJSONObject("end_location")
+                        val stepEndLatLng = if (endLoc != null) {
+                            LatLng(endLoc.optDouble("lat", 0.0), endLoc.optDouble("lng", 0.0))
+                        } else stepLatLng
+
+                        val stepPolyEncoded = stepObj.optJSONObject("polyline")?.optString("points").orEmpty()
+                        val stepPts = if (stepPolyEncoded.isNotEmpty()) decodePolyline(stepPolyEncoded) else listOf(stepLatLng, stepEndLatLng)
+                        val startPtIdx = detailedPoints.size.let { if (it > 0) it - 1 else 0 }
+                        if (detailedPoints.isEmpty()) {
+                            detailedPoints.addAll(stepPts)
+                        } else if (stepPts.isNotEmpty()) {
+                            val first = stepPts.first()
+                            val last = detailedPoints.last()
+                            if (first.latitude == last.latitude && first.longitude == last.longitude) {
+                                detailedPoints.addAll(stepPts.drop(1))
+                            } else {
+                                detailedPoints.addAll(stepPts)
+                            }
+                        }
+                        val endPtIdx = (detailedPoints.size - 1).coerceAtLeast(startPtIdx)
 
                         stepsList.add(
                             AutoRouteStep(
@@ -283,14 +312,21 @@ object GoogleMapsHelper {
                                 distanceText = stepDist,
                                 maneuver = maneuver,
                                 latLng = stepLatLng,
+                                endLatLng = stepEndLatLng,
+                                distanceMeters = stepDistMeters,
+                                durationSeconds = stepDurSeconds,
+                                startPointIndex = startPtIdx,
+                                endPointIndex = endPtIdx,
                             ),
                         )
                     }
                 }
 
+                val finalPoints = if (detailedPoints.size >= 2) detailedPoints else decodedPoints
+
                 routeResults.add(
                     AutoRouteResult(
-                        points = decodedPoints,
+                        points = finalPoints,
                         distanceText = distanceText,
                         distanceMeters = distanceMeters,
                         durationText = durationText,

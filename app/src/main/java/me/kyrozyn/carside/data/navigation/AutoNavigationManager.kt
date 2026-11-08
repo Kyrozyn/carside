@@ -13,6 +13,7 @@ data class AutoNavState(
     val availableRoutes: List<AutoRouteResult> = emptyList(),
     val selectedRouteIndex: Int = 0,
     val currentStepIndex: Int = 0,
+    val passedPointIndex: Int = 0,
 ) {
     val activeRoute: AutoRouteResult?
         get() = availableRoutes.getOrNull(selectedRouteIndex)
@@ -34,6 +35,7 @@ class AutoNavigationManager {
                 availableRoutes = routes,
                 selectedRouteIndex = 0,
                 currentStepIndex = 0,
+                passedPointIndex = 0,
                 isNavigating = false,
             )
         }
@@ -42,7 +44,7 @@ class AutoNavigationManager {
     fun selectRoute(index: Int) {
         _navState.update {
             if (index in it.availableRoutes.indices) {
-                it.copy(selectedRouteIndex = index, currentStepIndex = 0)
+                it.copy(selectedRouteIndex = index, currentStepIndex = 0, passedPointIndex = 0)
             } else it
         }
     }
@@ -50,7 +52,7 @@ class AutoNavigationManager {
     fun startNavigation() {
         _navState.update {
             if (it.availableRoutes.isNotEmpty()) {
-                it.copy(isNavigating = true, currentStepIndex = 0)
+                it.copy(isNavigating = true, currentStepIndex = 0, passedPointIndex = 0)
             } else it
         }
     }
@@ -63,17 +65,26 @@ class AutoNavigationManager {
 
     fun nextStep() {
         _navState.update { state ->
-            val maxSteps = state.activeRoute?.steps?.size ?: 0
-            if (state.currentStepIndex < maxSteps - 1) {
-                state.copy(currentStepIndex = state.currentStepIndex + 1)
+            val steps = state.activeRoute?.steps.orEmpty()
+            if (state.currentStepIndex < steps.size - 1) {
+                val nextIdx = state.currentStepIndex + 1
+                state.copy(
+                    currentStepIndex = nextIdx,
+                    passedPointIndex = steps[nextIdx].startPointIndex,
+                )
             } else state
         }
     }
 
     fun previousStep() {
         _navState.update { state ->
+            val steps = state.activeRoute?.steps.orEmpty()
             if (state.currentStepIndex > 0) {
-                state.copy(currentStepIndex = state.currentStepIndex - 1)
+                val prevIdx = state.currentStepIndex - 1
+                state.copy(
+                    currentStepIndex = prevIdx,
+                    passedPointIndex = steps.getOrNull(prevIdx)?.startPointIndex ?: 0,
+                )
             } else state
         }
     }
@@ -84,6 +95,34 @@ class AutoNavigationManager {
             if (index in 0 until maxSteps) {
                 state.copy(currentStepIndex = index)
             } else state
+        }
+    }
+
+    fun updateProgress(passedPointIndex: Int, stepIndex: Int) {
+        _navState.update { state ->
+            val maxSteps = state.activeRoute?.steps?.size ?: 0
+            val validStep = if (maxSteps > 0) stepIndex.coerceIn(0, maxSteps - 1) else 0
+            if (state.passedPointIndex == passedPointIndex && state.currentStepIndex == validStep) {
+                state
+            } else {
+                state.copy(
+                    passedPointIndex = passedPointIndex,
+                    currentStepIndex = validStep,
+                )
+            }
+        }
+    }
+
+    fun updateReroutedNavigation(routes: List<AutoRouteResult>) {
+        if (routes.isEmpty()) return
+        _navState.update { state ->
+            if (!state.isNavigating) state
+            else state.copy(
+                availableRoutes = routes,
+                selectedRouteIndex = 0,
+                currentStepIndex = 0,
+                passedPointIndex = 0,
+            )
         }
     }
 }
