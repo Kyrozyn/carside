@@ -170,6 +170,7 @@ fun DashboardScreen(
                             autoMapEngine = uiState.autoMapEngine,
                             autoNavigationManager = autoNavigationManager,
                             onOpenSettings = onOpenSettings,
+                            onSwitchToMapLibre = { viewModel.setAutoMapEngine(me.kyrozyn.carside.data.settings.AutoMapEngine.MAPLIBRE) },
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {

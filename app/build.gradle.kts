@@ -28,6 +28,10 @@ android {
         versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val mapsApiKey = (project.findProperty("MAPS_API_KEY") as? String
+            ?: System.getenv("MAPS_API_KEY")) ?: ""
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     signingConfigs {

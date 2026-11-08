@@ -1,6 +1,8 @@
 package me.kyrozyn.carside.ui.map
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -278,6 +280,7 @@ fun AutoMapPane(
     onOpenSettings: () -> Unit,
     autoMapEngine: AutoMapEngine = AutoMapEngine.MAPLIBRE,
     autoNavigationManager: AutoNavigationManager? = null,
+    onSwitchToMapLibre: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -347,6 +350,7 @@ fun AutoMapPane(
                 isDark = isDark,
                 onCameraCenterChanged = { cameraCenterTarget = it },
                 onSelectRoute = { autoNavigationManager?.selectRoute(it) },
+                onSwitchToMapLibre = onSwitchToMapLibre,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -1335,6 +1339,7 @@ private fun GoogleMapsOfficialEngine(
     isDark: Boolean,
     onCameraCenterChanged: (GmsLatLng) -> Unit,
     onSelectRoute: (Int) -> Unit,
+    onSwitchToMapLibre: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -1349,11 +1354,36 @@ private fun GoogleMapsOfficialEngine(
     }
     val isGmsAvailable = gmsStatus == ConnectionResult.SUCCESS
 
-    LaunchedEffect(isGmsAvailable) {
+    val manifestApiKey = remember {
+        try {
+            val appInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getApplicationInfo(
+                    context.packageName,
+                    PackageManager.ApplicationInfoFlags.of(PackageManager.GET_META_DATA.toLong()),
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getApplicationInfo(
+                    context.packageName,
+                    PackageManager.GET_META_DATA,
+                )
+            }
+            appInfo.metaData?.getString("com.google.android.geo.API_KEY")?.trim()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    LaunchedEffect(isGmsAvailable, manifestApiKey) {
         if (!isGmsAvailable) {
             AppLogger.e("GoogleMapsSDK", "Google Play Services tidak tersedia / status error: kode $gmsStatus")
+        } else if (manifestApiKey.isNullOrBlank()) {
+            AppLogger.e(
+                "GoogleMapsSDK",
+                "API Key di AndroidManifest.xml KOSONG. Google Maps SDK tidak dapat memuat tiles dari Google Play Services jika key hanya dimasukkan di Pengaturan aplikasi! Gunakan engine 'MapLibre (Google Tiles)' di Pengaturan."
+            )
         } else {
-            AppLogger.i("GoogleMapsSDK", "Google Play Services terdeteksi siap.")
+            AppLogger.i("GoogleMapsSDK", "Google Play Services siap & API Key ditemukan di AndroidManifest (${manifestApiKey.take(6)}...).")
         }
     }
 
@@ -1572,7 +1602,7 @@ private fun GoogleMapsOfficialEngine(
             modifier = Modifier.fillMaxSize(),
         )
 
-        // Banner peringatan jika Google Play Services tidak tersedia
+        // Banner peringatan jika Google Play Services tidak tersedia atau API Key kosong di AndroidManifest
         if (!isGmsAvailable) {
             Surface(
                 modifier = Modifier
@@ -1595,10 +1625,63 @@ private fun GoogleMapsOfficialEngine(
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        text = "Google Play Services tidak terpasang di Head Unit ini. Peta Google resmi mungkin blank. Disarankan beralih ke engine MapLibre di Pengaturan.",
+                        text = "Google Play Services tidak terpasang di perangkat ini. Peta Google resmi blank. Disarankan beralih ke engine MapLibre.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f),
                     )
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = onSwitchToMapLibre,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Text("Beralih ke MapLibre", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        } else if (manifestApiKey.isNullOrBlank()) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 20.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
+                shadowElevation = 8.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Google Maps SDK Membutuhkan API Key di APK",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Text(
+                            text = "Google Play Services hanya membaca key dari AndroidManifest (tidak bisa di-inject via Pengaturan). Beralihlah ke engine MapLibre agar peta Google langsung muncul.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = onSwitchToMapLibre,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Text("Beralih ke MapLibre", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         }

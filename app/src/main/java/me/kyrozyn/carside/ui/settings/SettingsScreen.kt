@@ -565,7 +565,7 @@ fun SettingsScreen(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            text = "Memerlukan Google Play Services dan Maps SDK for Android di Google Cloud.",
+                            text = "Memerlukan API Key di AndroidManifest saat build APK & Play Services. Pada APK rilis umum, SDK akan blank karena key tidak bisa disuntikkan secara dinamis.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

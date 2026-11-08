@@ -414,6 +414,10 @@ class DashboardViewModel(
             }
     }
 
+    fun setAutoMapEngine(engine: me.kyrozyn.carside.data.settings.AutoMapEngine) {
+        container.settingsRepository.setAutoMapEngine(engine)
+    }
+
     private fun shouldFetchWeatherForLocation(location: GeoLocation, nowMs: Long): Boolean {
         val lastLoc = lastWeatherFetchLocation
         if (lastLoc == null) return true
