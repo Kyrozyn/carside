@@ -55,6 +55,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
           VERSION_CODE: ${{ env.VERSION_CODE }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
         run: |
@@ -65,6 +66,7 @@ jobs:
             -PKEYSTORE_PASSWORD="${KEYSTORE_PASSWORD}" \
             -PKEY_ALIAS="${KEY_ALIAS}" \
             -PKEY_PASSWORD="${KEY_PASSWORD}" \
+            -PMAPS_API_KEY="${MAPS_API_KEY}" \
             --no-daemon
 
       - name: Prepare Artifacts
