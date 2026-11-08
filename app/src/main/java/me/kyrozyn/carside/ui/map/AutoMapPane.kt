@@ -267,6 +267,29 @@ private val GOOGLE_HYBRID_TRAFFIC_STYLE_JSON = """
 }
 """.trimIndent()
 
+private val GOOGLE_HYBRID_NO_TRAFFIC_STYLE_JSON = """
+{
+  "version": 8,
+  "sources": {
+    "google-tiles": {
+      "type": "raster",
+      "tiles": [
+        "https://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+        "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+        "https://mt2.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+        "https://mt3.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+      ],
+      "tileSize": 256
+    }
+  },
+  "layers": [{
+    "id": "google-tiles-layer",
+    "type": "raster",
+    "source": "google-tiles"
+  }]
+}
+""".trimIndent()
+
 /**
  * Tampilan Peta Google Maps bergaya Android Auto (Coolwalk UI).
  * Mendukung pemilihan engine antara MapLibre (Bebas GMS / Google Tiles) dan Google Maps SDK Resmi.
@@ -300,6 +323,7 @@ fun AutoMapPane(
     // Map controls & state
     var isTrafficEnabled by remember { mutableStateOf(true) }
     var isSatellite by remember { mutableStateOf(false) }
+    var recenterTrigger by remember { mutableStateOf(0L) }
 
     // Search state
     var searchQuery by remember { mutableStateOf("") }
@@ -351,6 +375,7 @@ fun AutoMapPane(
                 onCameraCenterChanged = { cameraCenterTarget = it },
                 onSelectRoute = { autoNavigationManager?.selectRoute(it) },
                 onSwitchToMapLibre = onSwitchToMapLibre,
+                recenterTrigger = recenterTrigger,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -369,6 +394,7 @@ fun AutoMapPane(
                 isSatellite = isSatellite,
                 isDark = isDark,
                 onCameraCenterChanged = { cameraCenterTarget = it },
+                recenterTrigger = recenterTrigger,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -635,11 +661,20 @@ fun AutoMapPane(
                 .padding(end = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            // Tombol Lokasi Saat Ini (Re-center)
+            FloatingControlIconButton(
+                icon = Icons.Default.MyLocation,
+                contentDescription = "Lokasi Saya",
+                isActive = false,
+            ) {
+                recenterTrigger = System.currentTimeMillis()
+            }
+
             // Traffic Layer Toggle
             FloatingControlIconButton(
                 icon = Icons.Default.Traffic,
                 contentDescription = "Lalu Lintas",
-                tint = if (isTrafficEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                isActive = isTrafficEnabled,
             ) {
                 isTrafficEnabled = !isTrafficEnabled
             }
@@ -648,7 +683,7 @@ fun AutoMapPane(
             FloatingControlIconButton(
                 icon = Icons.Default.Layers,
                 contentDescription = "Tipe Peta",
-                tint = if (isSatellite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                isActive = isSatellite,
             ) {
                 isSatellite = !isSatellite
             }
@@ -1089,6 +1124,7 @@ private fun MapLibreEngine(
     isSatellite: Boolean,
     isDark: Boolean,
     onCameraCenterChanged: (GmsLatLng) -> Unit,
+    recenterTrigger: Long = 0L,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -1142,6 +1178,23 @@ private fun MapLibreEngine(
             isStyleLoaded = true
             AppLogger.i("MapLibre", "MapLibre style berhasil dimuat (satelit=$isSatellite, dark=$isDark, traffic=$isTrafficEnabled)")
         }
+    }
+
+    // Re-center kamera secara manual saat tombol MyLocation diklik
+    LaunchedEffect(recenterTrigger) {
+        if (recenterTrigger == 0L) return@LaunchedEffect
+        val map = mapRef ?: return@LaunchedEffect
+        val loc = userLocation ?: return@LaunchedEffect
+        val latLng = MlLatLng(loc.latitude, loc.longitude)
+        val cameraPosition = MlCameraPosition.Builder()
+            .target(latLng)
+            .zoom(17.0)
+            .bearing(bearing.toDouble())
+            .tilt(if (bearing > 0f) 25.0 else 0.0)
+            .build()
+        map.animateCamera(MlCameraUpdateFactory.newCameraPosition(cameraPosition), 600)
+        onCameraCenterChanged(GmsLatLng(loc.latitude, loc.longitude))
+        AppLogger.i("MapLibre", "Re-center ke lokasi pengguna: (${loc.latitude}, ${loc.longitude})")
     }
 
     // Kamera mengikuti lokasi & rute
@@ -1340,6 +1393,7 @@ private fun GoogleMapsOfficialEngine(
     onCameraCenterChanged: (GmsLatLng) -> Unit,
     onSelectRoute: (Int) -> Unit,
     onSwitchToMapLibre: () -> Unit,
+    recenterTrigger: Long = 0L,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -1385,6 +1439,36 @@ private fun GoogleMapsOfficialEngine(
         } else {
             AppLogger.i("GoogleMapsSDK", "Google Play Services siap & API Key ditemukan di AndroidManifest (${manifestApiKey.take(6)}...).")
         }
+    }
+
+    // Tangani perubahan Lalu Lintas (Traffic), Satelit (Layers), dan Dark Mode secara real-time
+    LaunchedEffect(googleMap, isTrafficEnabled, isSatellite, isDark) {
+        val map = googleMap ?: return@LaunchedEffect
+        map.isTrafficEnabled = isTrafficEnabled
+        map.mapType = if (isSatellite) GoogleMap.MAP_TYPE_HYBRID else GoogleMap.MAP_TYPE_NORMAL
+        if (isDark && !isSatellite) {
+            applyGoogleMapDarkStyle(map)
+        } else if (!isDark && !isSatellite) {
+            map.setMapStyle(null)
+        }
+        AppLogger.i("GoogleMapsSDK", "GoogleMap state diperbarui (traffic=$isTrafficEnabled, satellite=$isSatellite, dark=$isDark)")
+    }
+
+    // Re-center kamera secara manual saat tombol MyLocation diklik
+    LaunchedEffect(recenterTrigger) {
+        if (recenterTrigger == 0L) return@LaunchedEffect
+        val map = googleMap ?: return@LaunchedEffect
+        val loc = userLocation ?: return@LaunchedEffect
+        val latLng = GmsLatLng(loc.latitude, loc.longitude)
+        val cameraPosition = GmsCameraPosition.Builder()
+            .target(latLng)
+            .zoom(17.0f)
+            .bearing(bearing)
+            .tilt(if (bearing > 0f) 25f else 0f)
+            .build()
+        map.animateCamera(GmsCameraUpdateFactory.newCameraPosition(cameraPosition), 600, null)
+        onCameraCenterChanged(latLng)
+        AppLogger.i("GoogleMapsSDK", "Re-center ke lokasi pengguna: (${loc.latitude}, ${loc.longitude})")
     }
 
     val mapView = remember {
@@ -1601,90 +1685,6 @@ private fun GoogleMapsOfficialEngine(
             },
             modifier = Modifier.fillMaxSize(),
         )
-
-        // Banner peringatan jika Google Play Services tidak tersedia atau API Key kosong di AndroidManifest
-        if (!isGmsAvailable) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 20.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
-                shadowElevation = 8.dp,
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(24.dp),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "Google Play Services tidak terpasang di perangkat ini. Peta Google resmi blank. Disarankan beralih ke engine MapLibre.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = onSwitchToMapLibre,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(8.dp),
-                    ) {
-                        Text("Beralih ke MapLibre", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-            }
-        } else if (manifestApiKey.isNullOrBlank()) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 20.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
-                shadowElevation = 8.dp,
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(24.dp),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Google Maps SDK Membutuhkan API Key di APK",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                        Text(
-                            text = "Google Play Services hanya membaca key dari AndroidManifest (tidak bisa di-inject via Pengaturan). Beralihlah ke engine MapLibre agar peta Google langsung muncul.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = onSwitchToMapLibre,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(8.dp),
-                    ) {
-                        Text("Beralih ke MapLibre", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -1694,7 +1694,7 @@ private fun GoogleMapsOfficialEngine(
 
 private fun getStyleJson(isDark: Boolean, isSatellite: Boolean, isTraffic: Boolean): String {
     return when {
-        isSatellite -> GOOGLE_HYBRID_TRAFFIC_STYLE_JSON
+        isSatellite -> if (isTraffic) GOOGLE_HYBRID_TRAFFIC_STYLE_JSON else GOOGLE_HYBRID_NO_TRAFFIC_STYLE_JSON
         isDark -> if (isTraffic) GOOGLE_DARK_TRAFFIC_STYLE_JSON else GOOGLE_DARK_NO_TRAFFIC_STYLE_JSON
         isTraffic -> GOOGLE_TRAFFIC_STYLE_JSON
         else -> GOOGLE_NO_TRAFFIC_STYLE_JSON
@@ -1818,20 +1818,32 @@ private fun QuickCategoryChip(label: String, onClick: () -> Unit) {
 private fun FloatingControlIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
-    tint: Color = MaterialTheme.colorScheme.onSurface,
+    isActive: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val containerColor = if (isActive) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+    }
+    val contentColor = if (isActive) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
     Surface(
         modifier = Modifier.size(46.dp),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        shadowElevation = 4.dp,
+        color = containerColor,
+        shadowElevation = 5.dp,
+        border = if (isActive) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
     ) {
         IconButton(onClick = onClick) {
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
-                tint = tint,
+                tint = contentColor,
                 modifier = Modifier.size(22.dp),
             )
         }
