@@ -46,13 +46,16 @@ object GoogleMapsHelper {
 
     private val httpClient = OkHttpClient.Builder().build()
 
+    @Volatile
+    private var cachedApiKey: String? = null
+
     /**
-     * Memasukkan API Key Google Maps secara dinamis ke dalam metaData aplikasi.
-     * Ini memungkinkan MapView SDK membaca API Key yang diatur lewat halaman Pengaturan.
+     * Membaca API Key dari AndroidManifest (ditambahkan saat build / GitHub Actions).
      */
-    fun applyApiKey(context: Context, apiKey: String?) {
-        if (apiKey.isNullOrBlank()) return
-        try {
+    fun getApiKey(context: Context): String? {
+        val cached = cachedApiKey
+        if (!cached.isNullOrBlank()) return cached
+        return try {
             val appInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.packageManager.getApplicationInfo(
                     context.packageName,
@@ -65,28 +68,51 @@ object GoogleMapsHelper {
                     PackageManager.GET_META_DATA,
                 )
             }
-            if (appInfo.metaData == null) {
-                appInfo.metaData = Bundle()
-            }
-            appInfo.metaData.putString("com.google.android.geo.API_KEY", apiKey.trim())
-        } catch (e: Exception) {}
+            val key = appInfo.metaData?.getString("com.google.android.geo.API_KEY")?.trim()?.ifEmpty { null }
+            cachedApiKey = key
+            key
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Inisialisasi awal GoogleMapsHelper pada saat aplikasi dimulai.
+     */
+    fun init(context: Context) {
+        val key = getApiKey(context)
+        if (!key.isNullOrBlank()) {
+            AppLogger.i("GoogleMaps", "API Key AndroidManifest terdeteksi: ${key.take(6)}...")
+        } else {
+            AppLogger.i("GoogleMaps", "API Key AndroidManifest belum terisi (kosong).")
+        }
+    }
+
+    /**
+     * Menyimpan API Key ke memory jika diberikan secara dinamis.
+     */
+    fun applyApiKey(context: Context, apiKey: String?) {
+        if (!apiKey.isNullOrBlank()) {
+            cachedApiKey = apiKey.trim()
+        }
     }
 
     /**
      * Mencari tempat/alamat menggunakan Google Places Text Search API.
-     * Fallback ke Android Geocoder jika API Key kosong atau terjadi error.
+     * Menggunakan API Key dari AndroidManifest atau parameter, lalu fallback ke Android Geocoder jika kosong.
      */
     suspend fun searchPlaces(
         context: Context,
         query: String,
         location: GeoLocation?,
-        apiKey: String?,
+        apiKey: String? = null,
     ): List<AutoPlaceResult> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
-        AppLogger.i("PlacesSearch", "Mencari alamat: '$query' (API Key: ${if (apiKey.isNullOrBlank()) "Kosong" else "Ada"})")
+        val effectiveKey = apiKey?.ifBlank { null } ?: getApiKey(context)
+        AppLogger.i("PlacesSearch", "Mencari alamat: '$query' (API Key: ${if (effectiveKey.isNullOrBlank()) "Kosong" else "Ada"})")
 
-        if (!apiKey.isNullOrBlank()) {
-            val fromApi = searchPlacesWithGoogleApi(query, location, apiKey)
+        if (!effectiveKey.isNullOrBlank()) {
+            val fromApi = searchPlacesWithGoogleApi(query, location, effectiveKey)
             if (fromApi.isNotEmpty()) return@withContext fromApi
         }
 
@@ -180,9 +206,10 @@ object GoogleMapsHelper {
     suspend fun getRoutes(
         origin: LatLng,
         destination: LatLng,
-        apiKey: String?,
+        apiKey: String? = null,
     ): List<AutoRouteResult> = withContext(Dispatchers.IO) {
-        if (apiKey.isNullOrBlank()) {
+        val effectiveKey = apiKey?.ifBlank { null } ?: cachedApiKey
+        if (effectiveKey.isNullOrBlank()) {
             AppLogger.w("Directions", "Tidak dapat meminta rute: Google Maps API Key kosong!")
             return@withContext emptyList()
         }
@@ -195,7 +222,7 @@ object GoogleMapsHelper {
             "&mode=driving" +
             "&alternatives=true" +
             "&language=id" +
-            "&key=$apiKey"
+            "&key=$effectiveKey"
 
         val request = Request.Builder().url(url).build()
         try {

@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.BluetoothAudio
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Navigation
@@ -446,8 +445,6 @@ fun SettingsScreen(
             // ── Mode Auto (Google Maps) ──────────────────────────────────
             val autoModeEnabled by settingsRepository.autoModeEnabled.collectAsState()
             val autoMapEngine by settingsRepository.autoMapEngine.collectAsState()
-            val googleMapsApiKey by settingsRepository.googleMapsApiKey.collectAsState()
-            var showApiKeyDialog by remember { mutableStateOf(false) }
 
             SettingsCardWithIcon(
                 icon = Icons.Outlined.Navigation,
@@ -565,113 +562,12 @@ fun SettingsScreen(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            text = "Memerlukan API Key di AndroidManifest saat build APK & Play Services. Pada APK rilis umum, SDK akan blank karena key tidak bisa disuntikkan secara dinamis.",
+                            text = "Menggunakan Maps SDK resmi dari Google Play Services dengan API Key yang ditanam saat build APK.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Google Maps API Key",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = if (googleMapsApiKey.isNullOrBlank()) {
-                                "Belum diatur (Diperlukan untuk peta, rute & pencarian)"
-                            } else {
-                                val key = googleMapsApiKey.orEmpty()
-                                val masked = if (key.length > 8) "${key.take(6)}...${key.takeLast(4)}" else "••••••••"
-                                "Tersimpan: $masked"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (googleMapsApiKey.isNullOrBlank()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = { showApiKeyDialog = true },
-                        shape = RoundedCornerShape(32.dp),
-                    ) {
-                        Text(if (googleMapsApiKey.isNullOrBlank()) "Atur Key" else "Ubah")
-                    }
-                }
-            }
-
-            if (showApiKeyDialog) {
-                var tempKey by remember(googleMapsApiKey) { mutableStateOf(googleMapsApiKey ?: "") }
-                AlertDialog(
-                    onDismissRequest = { showApiKeyDialog = false },
-                    icon = {
-                        Icon(
-                            Icons.Outlined.Key,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    title = { Text("Google Maps API Key") },
-                    text = {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState()),
-                        ) {
-                            Text(
-                                text = "Masukkan API Key dari Google Cloud Console Anda. Kunci ini digunakan untuk Google Maps SDK, Directions API, dan Places API.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            OutlinedTextField(
-                                value = tempKey,
-                                onValueChange = { tempKey = it },
-                                label = { Text("API Key") },
-                                placeholder = { Text("AIzaSy...") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                text = "Pastikan API berikut sudah aktif di Google Cloud Console:\n" +
-                                    "• Maps SDK for Android\n" +
-                                    "• Directions API\n" +
-                                    "• Places API (New) / Places API\n" +
-                                    "• Geocoding API",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                val cleaned = tempKey.trim().ifEmpty { null }
-                                settingsRepository.setGoogleMapsApiKey(cleaned)
-                                me.kyrozyn.carside.core.GoogleMapsHelper.applyApiKey(context, cleaned)
-                                showApiKeyDialog = false
-                            },
-                        ) {
-                            Text("Simpan")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showApiKeyDialog = false }) {
-                            Text("Batal")
-                        }
-                    },
-                )
             }
 
             // ── Kelola download maps ────────────────────────────────────
