@@ -83,6 +83,7 @@ object GoogleMapsHelper {
         apiKey: String?,
     ): List<AutoPlaceResult> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
+        AppLogger.i("PlacesSearch", "Mencari alamat: '$query' (API Key: ${if (apiKey.isNullOrBlank()) "Kosong" else "Ada"})")
 
         if (!apiKey.isNullOrBlank()) {
             val fromApi = searchPlacesWithGoogleApi(query, location, apiKey)
@@ -109,9 +110,16 @@ object GoogleMapsHelper {
         val request = Request.Builder().url(urlBuilder.toString()).build()
         return try {
             val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful) return emptyList()
-            val body = response.body?.string() ?: return emptyList()
+            val body = response.body?.string() ?: ""
+            if (!response.isSuccessful) {
+                AppLogger.w("PlacesSearch", "Google Places API gagal: HTTP ${response.code} $body")
+                return emptyList()
+            }
             val json = JSONObject(body)
+            val status = json.optString("status", "")
+            if (status != "OK" && status != "ZERO_RESULTS") {
+                AppLogger.e("PlacesSearch", "Google Places API status=$status, pesan: ${json.optString("error_message")}")
+            }
             val resultsArr = json.optJSONArray("results") ?: return emptyList()
 
             val list = mutableListOf<AutoPlaceResult>()
@@ -135,18 +143,21 @@ object GoogleMapsHelper {
                     }
                 }
             }
+            AppLogger.i("PlacesSearch", "Ditemukan ${list.size} tempat via Google Places API")
             list
         } catch (e: Exception) {
+            AppLogger.e("PlacesSearch", "Exception Google Places API: ${e.message}", e)
             emptyList()
         }
     }
 
     private fun searchWithGeocoderFallback(context: Context, query: String): List<AutoPlaceResult> {
         return try {
+            AppLogger.i("PlacesSearch", "Mencari via Android Geocoder bawaan (offline/tanpa key)...")
             val geocoder = Geocoder(context, Locale("id", "ID"))
             @Suppress("DEPRECATION")
             val addresses = geocoder.getFromLocationName(query, 8) ?: emptyList()
-            addresses.mapNotNull { addr ->
+            val list = addresses.mapNotNull { addr ->
                 val title = addr.featureName ?: addr.thoroughfare ?: query
                 val fullAddress = (0..addr.maxAddressLineIndex).joinToString(", ") { addr.getAddressLine(it) }
                 AutoPlaceResult(
@@ -155,7 +166,10 @@ object GoogleMapsHelper {
                     latLng = LatLng(addr.latitude, addr.longitude),
                 )
             }
+            AppLogger.i("PlacesSearch", "Geocoder selesai: ${list.size} hasil")
+            list
         } catch (e: Exception) {
+            AppLogger.e("PlacesSearch", "Exception Geocoder: ${e.message}", e)
             emptyList()
         }
     }
@@ -168,7 +182,12 @@ object GoogleMapsHelper {
         destination: LatLng,
         apiKey: String?,
     ): List<AutoRouteResult> = withContext(Dispatchers.IO) {
-        if (apiKey.isNullOrBlank()) return@withContext emptyList()
+        if (apiKey.isNullOrBlank()) {
+            AppLogger.w("Directions", "Tidak dapat meminta rute: Google Maps API Key kosong!")
+            return@withContext emptyList()
+        }
+
+        AppLogger.i("Directions", "Meminta rute navigasi dari (${origin.latitude}, ${origin.longitude}) ke (${destination.latitude}, ${destination.longitude})")
 
         val url = "https://maps.googleapis.com/maps/api/directions/json" +
             "?origin=${origin.latitude},${origin.longitude}" +
@@ -181,9 +200,16 @@ object GoogleMapsHelper {
         val request = Request.Builder().url(url).build()
         try {
             val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful) return@withContext emptyList()
-            val body = response.body?.string() ?: return@withContext emptyList()
+            val body = response.body?.string() ?: ""
+            if (!response.isSuccessful) {
+                AppLogger.e("Directions", "Directions API gagal: HTTP ${response.code} $body")
+                return@withContext emptyList()
+            }
             val json = JSONObject(body)
+            val status = json.optString("status", "")
+            if (status != "OK") {
+                AppLogger.e("Directions", "Directions API status=$status, pesan: ${json.optString("error_message")}")
+            }
 
             val routesArr = json.optJSONArray("routes")
             if (routesArr == null || routesArr.length() == 0) return@withContext emptyList()
@@ -249,8 +275,10 @@ object GoogleMapsHelper {
                     ),
                 )
             }
+            AppLogger.i("Directions", "Berhasil mendapatkan ${routeResults.size} rute.")
             routeResults
         } catch (e: Exception) {
+            AppLogger.e("Directions", "Exception Directions API: ${e.message}", e)
             emptyList()
         }
     }

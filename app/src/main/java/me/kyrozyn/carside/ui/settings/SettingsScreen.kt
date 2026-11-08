@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BluetoothAudio
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.LocationOn
@@ -87,6 +88,7 @@ fun SettingsScreen(
     selectedPalette: AppThemePalette,
     onPaletteSelected: (AppThemePalette) -> Unit,
     settingsRepository: AppSettingsRepository,
+    onOpenLogs: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
@@ -442,6 +444,7 @@ fun SettingsScreen(
 
             // ── Mode Auto (Google Maps) ──────────────────────────────────
             val autoModeEnabled by settingsRepository.autoModeEnabled.collectAsState()
+            val autoMapEngine by settingsRepository.autoMapEngine.collectAsState()
             val googleMapsApiKey by settingsRepository.googleMapsApiKey.collectAsState()
             var showApiKeyDialog by remember { mutableStateOf(false) }
 
@@ -479,6 +482,93 @@ fun SettingsScreen(
                             checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
                         ),
                     )
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                )
+
+                // Pilihan Engine Peta Mode Auto
+                Text(
+                    text = "Engine Peta Mode Auto",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Pilih library penampil peta saat Mode Auto aktif",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { settingsRepository.setAutoMapEngine(me.kyrozyn.carside.data.settings.AutoMapEngine.MAPLIBRE) }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = autoMapEngine == me.kyrozyn.carside.data.settings.AutoMapEngine.MAPLIBRE,
+                        onClick = { settingsRepository.setAutoMapEngine(me.kyrozyn.carside.data.settings.AutoMapEngine.MAPLIBRE) },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "MapLibre (Google Tiles)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            ) {
+                                Text(
+                                    text = "Rekomendasi",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Bebas Google Play Services, anti-blank, ringan, cocok untuk Head Unit Android.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { settingsRepository.setAutoMapEngine(me.kyrozyn.carside.data.settings.AutoMapEngine.GOOGLE_MAPS_OFFICIAL) }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = autoMapEngine == me.kyrozyn.carside.data.settings.AutoMapEngine.GOOGLE_MAPS_OFFICIAL,
+                        onClick = { settingsRepository.setAutoMapEngine(me.kyrozyn.carside.data.settings.AutoMapEngine.GOOGLE_MAPS_OFFICIAL) },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Google Maps Resmi (SDK)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = "Memerlukan Google Play Services dan Maps SDK for Android di Google Cloud.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
                 HorizontalDivider(
@@ -601,6 +691,16 @@ fun SettingsScreen(
                 title = "Privacy Policy",
                 description = "Lihat kebijakan privasi resmi Carside.",
                 onClick = onOpenPrivacyPolicy,
+            )
+
+            // ── Log Aplikasi & Debugging ────────────────────────────────
+            SettingsNavCard(
+                icon = Icons.Outlined.BugReport,
+                iconTint = MaterialTheme.colorScheme.tertiary,
+                iconBackground = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
+                title = "Log Aplikasi & Debugging",
+                description = "Pantau aktivitas, status Google Maps, GPS, dan error sistem secara langsung.",
+                onClick = onOpenLogs,
             )
         }
     }

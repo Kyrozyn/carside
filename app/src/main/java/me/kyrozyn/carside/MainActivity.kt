@@ -40,6 +40,7 @@ import me.kyrozyn.carside.ui.internetradio.InternetRadioScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardScreen
 import me.kyrozyn.carside.ui.dashboard.DashboardViewModel
 import me.kyrozyn.carside.ui.garage.GarageScreen
+import me.kyrozyn.carside.ui.logs.LogsScreen
 import me.kyrozyn.carside.ui.offlinemaps.AddOfflineMapScreen
 import me.kyrozyn.carside.ui.offlinemaps.OfflineMapsScreen
 import me.kyrozyn.carside.ui.settings.SettingsScreen
@@ -91,6 +92,7 @@ class MainActivity : ComponentActivity() {
                 var showInternetRadio by remember { mutableStateOf(false) }
                 var showGarage by remember { mutableStateOf(false) }
                 var showSettings by remember { mutableStateOf(false) }
+                var showLogs by remember { mutableStateOf(false) }
                 var settingsOfflineMaps by remember { mutableStateOf(false) }
                 var settingsOfflineMapAdd by remember { mutableStateOf(false) }
 
@@ -99,6 +101,7 @@ class MainActivity : ComponentActivity() {
                     showInternetRadio = false
                     showGarage = false
                     showSettings = false
+                    showLogs = false
                     settingsOfflineMaps = false
                     settingsOfflineMapAdd = false
                     vm.resetOverlays()
@@ -259,8 +262,14 @@ class MainActivity : ComponentActivity() {
                             selectedPalette = selectedPalette,
                             onPaletteSelected = { container.settingsRepository.setSelectedPalette(it) },
                             settingsRepository = container.settingsRepository,
+                            onOpenLogs = { showLogs = true },
                         )
                     }
+                } else if (showLogs) {
+                    LogsScreen(
+                        onBack = { showLogs = false },
+                        onHome = resetToHome,
+                    )
                 } else {
                     DashboardScreen(
                         uiState = uiState,

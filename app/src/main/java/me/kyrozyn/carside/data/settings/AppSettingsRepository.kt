@@ -59,6 +59,13 @@ class AppSettingsRepository(context: Context) {
     )
     val autoModeEnabled: StateFlow<Boolean> = _autoModeEnabled.asStateFlow()
 
+    private val _autoMapEngine = MutableStateFlow(
+        prefs.getString(KEY_AUTO_MAP_ENGINE, null)
+            ?.let { runCatching { AutoMapEngine.valueOf(it) }.getOrNull() }
+            ?: AutoMapEngine.MAPLIBRE,
+    )
+    val autoMapEngine: StateFlow<AutoMapEngine> = _autoMapEngine.asStateFlow()
+
     private val _googleMapsApiKey = MutableStateFlow(
         prefs.getString(KEY_GOOGLE_MAPS_API_KEY, null),
     )
@@ -68,6 +75,12 @@ class AppSettingsRepository(context: Context) {
         if (_autoModeEnabled.value == enabled) return
         _autoModeEnabled.value = enabled
         prefs.edit().putBoolean(KEY_AUTO_MODE_ENABLED, enabled).apply()
+    }
+
+    fun setAutoMapEngine(engine: AutoMapEngine) {
+        if (_autoMapEngine.value == engine) return
+        _autoMapEngine.value = engine
+        prefs.edit().putString(KEY_AUTO_MAP_ENGINE, engine.name).apply()
     }
 
     fun setGoogleMapsApiKey(apiKey: String?) {
@@ -227,6 +240,7 @@ class AppSettingsRepository(context: Context) {
         private const val KEY_CUSTOM_BT_MUSIC_PACKAGE = "custom_bt_music_package"
         private const val KEY_CUSTOM_BT_MUSIC_ACTIVITY = "custom_bt_music_activity"
         private const val KEY_AUTO_MODE_ENABLED = "auto_mode_enabled"
+        private const val KEY_AUTO_MAP_ENGINE = "auto_map_engine"
         private const val KEY_GOOGLE_MAPS_API_KEY = "google_maps_api_key"
     }
 }

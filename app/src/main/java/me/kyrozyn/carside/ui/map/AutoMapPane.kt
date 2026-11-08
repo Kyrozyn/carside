@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Traffic
 import androidx.compose.material.icons.filled.TurnLeft
 import androidx.compose.material.icons.filled.TurnRight
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -79,24 +80,41 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
+import com.google.android.gms.maps.CameraUpdateFactory as GmsCameraUpdateFactory
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.MapView as GmsMapView
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.CameraPosition as GmsCameraPosition
+import com.google.android.gms.maps.model.JointType as GmsJointType
+import com.google.android.gms.maps.model.LatLng as GmsLatLng
+import com.google.android.gms.maps.model.LatLngBounds as GmsLatLngBounds
+import com.google.android.gms.maps.model.MapStyleOptions as GmsMapStyleOptions
+import com.google.android.gms.maps.model.Marker as GmsMarker
+import com.google.android.gms.maps.model.MarkerOptions as GmsMarkerOptions
+import com.google.android.gms.maps.model.Polyline as GmsPolyline
+import com.google.android.gms.maps.model.PolylineOptions as GmsPolylineOptions
+import com.google.android.gms.maps.model.RoundCap as GmsRoundCap
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import me.kyrozyn.carside.core.AppLogger
 import me.kyrozyn.carside.core.AutoPlaceResult
 import me.kyrozyn.carside.core.AutoRouteResult
 import me.kyrozyn.carside.core.GoogleMapsHelper
 import me.kyrozyn.carside.data.navigation.AutoNavState
 import me.kyrozyn.carside.data.navigation.AutoNavigationManager
+import me.kyrozyn.carside.data.settings.AutoMapEngine
 import me.kyrozyn.carside.domain.model.GeoLocation
-import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.geometry.LatLng as MapLibreLatLng
-import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.camera.CameraPosition as MlCameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory as MlCameraUpdateFactory
+import org.maplibre.android.geometry.LatLng as MlLatLng
+import org.maplibre.android.geometry.LatLngBounds as MlLatLngBounds
 import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.Style
+import org.maplibre.android.maps.MapView as MlMapView
+import org.maplibre.android.maps.Style as MlStyle
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
@@ -143,7 +161,6 @@ private val GOOGLE_TRAFFIC_STYLE_JSON = """
 }
 """.trimIndent()
 
-// Style Google Maps tanpa layer traffic
 private val GOOGLE_NO_TRAFFIC_STYLE_JSON = """
 {
   "version": 8,
@@ -167,7 +184,6 @@ private val GOOGLE_NO_TRAFFIC_STYLE_JSON = """
 }
 """.trimIndent()
 
-// Style Google Maps Mode Gelap dengan traffic
 private val GOOGLE_DARK_TRAFFIC_STYLE_JSON = """
 {
   "version": 8,
@@ -197,7 +213,6 @@ private val GOOGLE_DARK_TRAFFIC_STYLE_JSON = """
 }
 """.trimIndent()
 
-// Style Google Maps Mode Gelap tanpa traffic
 private val GOOGLE_DARK_NO_TRAFFIC_STYLE_JSON = """
 {
   "version": 8,
@@ -227,7 +242,6 @@ private val GOOGLE_DARK_NO_TRAFFIC_STYLE_JSON = """
 }
 """.trimIndent()
 
-// Style Google Maps Satelit / Hybrid dengan traffic
 private val GOOGLE_HYBRID_TRAFFIC_STYLE_JSON = """
 {
   "version": 8,
@@ -252,10 +266,8 @@ private val GOOGLE_HYBRID_TRAFFIC_STYLE_JSON = """
 """.trimIndent()
 
 /**
- * Tampilan Peta bergaya Android Auto (Coolwalk UI).
- * Berjalan tanpa crash dan tanpa layar blank pada seluruh Head Unit Android (dengan atau tanpa Google Play Services),
- * mendukung pencarian alamat/tempat, rute navigasi dengan directions, petunjuk manuver belokan,
- * serta kontrol peta interaktif langsung di head unit.
+ * Tampilan Peta Google Maps bergaya Android Auto (Coolwalk UI).
+ * Mendukung pemilihan engine antara MapLibre (Bebas GMS / Google Tiles) dan Google Maps SDK Resmi.
  */
 @Composable
 fun AutoMapPane(
@@ -264,11 +276,11 @@ fun AutoMapPane(
     bearing: Float,
     apiKey: String?,
     onOpenSettings: () -> Unit,
+    autoMapEngine: AutoMapEngine = AutoMapEngine.MAPLIBRE,
     autoNavigationManager: AutoNavigationManager? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
     val isDark = isSystemInDarkTheme()
 
@@ -282,9 +294,7 @@ fun AutoMapPane(
     val activeRoute = navState.activeRoute
     val currentStepIndex = navState.currentStepIndex
 
-    // Map instances & state
-    var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
-    var isStyleLoaded by remember { mutableStateOf(false) }
+    // Map controls & state
     var isTrafficEnabled by remember { mutableStateOf(true) }
     var isSatellite by remember { mutableStateOf(false) }
 
@@ -293,6 +303,9 @@ fun AutoMapPane(
     var isSearching by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<AutoPlaceResult>>(emptyList()) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
+
+    // Koordinat tengah kamera terakhir untuk fallback pencarian rute
+    var cameraCenterTarget by remember { mutableStateOf<GmsLatLng?>(null) }
 
     // Hitung arah hadap kendaraan (heading) yang efektif
     val effectiveBearing = remember(isNavigating, activeRoute, currentStepIndex, bearing) {
@@ -311,233 +324,50 @@ fun AutoMapPane(
         }
     }
 
-    // Inisialisasi MapView MapLibre
-    val mapView = remember(context) {
-        MapView(context).apply {
-            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                val h = v.height
-                if (h > 0) {
-                    val topPadding = (h * 0.52f).toInt()
-                    mapRef?.setPadding(0, topPadding, 0, 0)
-                }
-            }
-        }
-    }
-
-    // Kelola siklus hidup MapView secara aman di Jetpack Compose
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> mapView.onStart()
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        mapView.onCreate(null)
-        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-            mapView.onStart()
-        }
-        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-            mapView.onResume()
-        }
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            mapView.onDestroy()
-        }
-    }
-
-    // Muat style peta saat pertama kali siap atau saat mode (Gelap / Satelit / Trafik) berubah
-    LaunchedEffect(mapRef, isDark, isSatellite, isTrafficEnabled) {
-        val map = mapRef ?: return@LaunchedEffect
-        isStyleLoaded = false
-        val styleJson = getStyleJson(isDark, isSatellite, isTrafficEnabled)
-        map.setStyle(Style.Builder().fromJson(styleJson)) { loadedStyle ->
-            setupStyleLayers(loadedStyle, context)
-            isStyleLoaded = true
-        }
-    }
-
-    // Kamera mengikuti lokasi & rute
-    LaunchedEffect(mapRef, isStyleLoaded, userLocation, isNavigating, activeRoute, currentStepIndex, bearing, effectiveBearing) {
-        val map = mapRef ?: return@LaunchedEffect
-        if (!isStyleLoaded) return@LaunchedEffect
-
-        if (!isNavigating && activeRoute == null) {
-            val loc = userLocation
-            if (loc != null) {
-                val cameraPosition = CameraPosition.Builder()
-                    .target(MapLibreLatLng(loc.latitude, loc.longitude))
-                    .zoom(16.5)
-                    .bearing(bearing.toDouble())
-                    .tilt(if (bearing > 0f) 25.0 else 0.0)
-                    .build()
-                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 800)
-            }
-        } else if (isNavigating && activeRoute != null) {
-            val route = activeRoute
-            val steps = route.steps
-            val currentStep = steps.getOrNull(currentStepIndex)
-
-            // Target koordinat navigasi (jika GPS tidak ada di headunit, gunakan titik rute)
-            val navTarget = if (userLocation != null) {
-                LatLng(userLocation.latitude, userLocation.longitude)
-            } else if (currentStep != null && currentStepIndex > 0) {
-                currentStep.latLng
-            } else {
-                route.points.firstOrNull() ?: LatLng(-6.1754, 106.8272)
-            }
-
-            // Close-up Zoom & 3D Tilt khas Google Maps Driving Mode
-            val cameraPosition = CameraPosition.Builder()
-                .target(MapLibreLatLng(navTarget.latitude, navTarget.longitude))
-                .zoom(18.0)
-                .bearing(effectiveBearing.toDouble())
-                .tilt(50.0)
-                .build()
-            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000)
-        }
-    }
-
-    // Perbarui penanda kendaraan (Vehicle Marker) dan penanda tujuan (Destination Marker)
-    LaunchedEffect(mapRef, isStyleLoaded, userLocation, isNavigating, activeRoute, currentStepIndex, effectiveBearing, selectedPlace) {
-        val map = mapRef ?: return@LaunchedEffect
-        if (!isStyleLoaded) return@LaunchedEffect
-        val style = map.style ?: return@LaunchedEffect
-
-        // Destination Marker
-        val destSource = style.getSource(SOURCE_DEST) as? GeoJsonSource
-        val place = selectedPlace
-        if (place != null) {
-            destSource?.setGeoJson(Point.fromLngLat(place.latLng.longitude, place.latLng.latitude))
-        } else {
-            destSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
-        }
-
-        // Vehicle Marker
-        val navTarget = if (isNavigating && activeRoute != null) {
-            val steps = activeRoute.steps
-            val currentStep = steps.getOrNull(currentStepIndex)
-            if (userLocation != null) {
-                LatLng(userLocation.latitude, userLocation.longitude)
-            } else if (currentStep != null && currentStepIndex > 0) {
-                currentStep.latLng
-            } else {
-                activeRoute.points.firstOrNull() ?: LatLng(-6.1754, 106.8272)
-            }
-        } else if (userLocation != null) {
-            LatLng(userLocation.latitude, userLocation.longitude)
-        } else null
-
-        val vehicleSource = style.getSource(SOURCE_VEHICLE) as? GeoJsonSource
-        val vehicleLayer = style.getLayer(LAYER_VEHICLE) as? SymbolLayer
-        if (navTarget != null) {
-            vehicleSource?.setGeoJson(Point.fromLngLat(navTarget.longitude, navTarget.latitude))
-            if (isNavigating) {
-                vehicleLayer?.setProperties(
-                    PropertyFactory.iconImage(ICON_NAV_ARROW),
-                    PropertyFactory.iconRotate(effectiveBearing),
-                    PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
-                )
-            } else {
-                vehicleLayer?.setProperties(
-                    PropertyFactory.iconImage(ICON_LOCATION_DOT),
-                    PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_VIEWPORT),
-                )
-            }
-        } else {
-            vehicleSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
-        }
-    }
-
-    // Perbarui rute polyline di peta saat availableRoutes, selectedRouteIndex, atau isNavigating berubah
-    LaunchedEffect(mapRef, isStyleLoaded, availableRoutes, selectedRouteIndex, isNavigating) {
-        val map = mapRef ?: return@LaunchedEffect
-        if (!isStyleLoaded) return@LaunchedEffect
-        val style = map.style ?: return@LaunchedEffect
-
-        val activeSource = style.getSource(SOURCE_ACTIVE_ROUTE) as? GeoJsonSource
-        val currentRoute = if (isNavigating) {
-            activeRoute ?: availableRoutes.getOrNull(selectedRouteIndex)
-        } else {
-            availableRoutes.getOrNull(selectedRouteIndex)
-        }
-
-        if (currentRoute != null && currentRoute.points.isNotEmpty()) {
-            val coords = currentRoute.points.map { Point.fromLngLat(it.longitude, it.latitude) }
-            activeSource?.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))
-        } else {
-            activeSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
-        }
-
-        // Rute alternatif (hanya aktif saat dalam mode pratinjau rute)
-        for (i in 0 until 5) {
-            val srcId = "$SOURCE_ALT_ROUTE_PREFIX$i"
-            val altSource = style.getSource(srcId) as? GeoJsonSource
-            if (!isNavigating && i < availableRoutes.size && i != selectedRouteIndex) {
-                val r = availableRoutes[i]
-                val coords = r.points.map { Point.fromLngLat(it.longitude, it.latitude) }
-                altSource?.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))
-            } else {
-                altSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
-            }
-        }
-
-        // Zoom kamera mencakup seluruh rute alternatif yang tersedia saat pemilihan rute
-        if (!isNavigating && availableRoutes.isNotEmpty()) {
-            try {
-                val boundsBuilder = LatLngBounds.Builder()
-                var count = 0
-                availableRoutes.forEach { r ->
-                    r.points.forEach { pt ->
-                        boundsBuilder.include(MapLibreLatLng(pt.latitude, pt.longitude))
-                        count++
-                    }
-                }
-                if (count > 0) {
-                    map.easeCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120))
-                }
-            } catch (_: Exception) {}
-        }
+    LaunchedEffect(autoMapEngine) {
+        AppLogger.i("AutoMap", "Engine Peta aktif: ${autoMapEngine.name}")
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // Tampilan Peta MapView
-        AndroidView(
-            factory = {
-                mapView.getMapAsync { map ->
-                    mapRef = map
-                    map.uiSettings.isCompassEnabled = true
-                    map.uiSettings.isLogoEnabled = false
-                    map.uiSettings.isAttributionEnabled = false
-
-                    val h = mapView.height
-                    if (h > 0) {
-                        val topPadding = (h * 0.52f).toInt()
-                        map.setPadding(0, topPadding, 0, 0)
-                    }
-
-                    // Posisi awal kamera (Monas/Jakarta jika GPS belum aktif)
-                    val startPos = if (userLocation != null) {
-                        MapLibreLatLng(userLocation.latitude, userLocation.longitude)
-                    } else {
-                        MapLibreLatLng(-6.1754, 106.8272)
-                    }
-                    val initialCamera = CameraPosition.Builder()
-                        .target(startPos)
-                        .zoom(16.5)
-                        .bearing(bearing.toDouble())
-                        .tilt(if (bearing > 0f) 25.0 else 0.0)
-                        .build()
-                    map.moveCamera(CameraUpdateFactory.newCameraPosition(initialCamera))
-                }
-                mapView
-            },
-            modifier = Modifier.fillMaxSize(),
-        )
+        // Tampilan Peta Sesuai Engine Pilihan Pengguna
+        if (autoMapEngine == AutoMapEngine.GOOGLE_MAPS_OFFICIAL) {
+            GoogleMapsOfficialEngine(
+                hasLocationPermission = hasLocationPermission,
+                userLocation = userLocation,
+                bearing = bearing,
+                effectiveBearing = effectiveBearing,
+                isNavigating = isNavigating,
+                selectedPlace = selectedPlace,
+                availableRoutes = availableRoutes,
+                selectedRouteIndex = selectedRouteIndex,
+                activeRoute = activeRoute,
+                currentStepIndex = currentStepIndex,
+                isTrafficEnabled = isTrafficEnabled,
+                isSatellite = isSatellite,
+                isDark = isDark,
+                onCameraCenterChanged = { cameraCenterTarget = it },
+                onSelectRoute = { autoNavigationManager?.selectRoute(it) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            MapLibreEngine(
+                hasLocationPermission = hasLocationPermission,
+                userLocation = userLocation,
+                bearing = bearing,
+                effectiveBearing = effectiveBearing,
+                isNavigating = isNavigating,
+                selectedPlace = selectedPlace,
+                availableRoutes = availableRoutes,
+                selectedRouteIndex = selectedRouteIndex,
+                activeRoute = activeRoute,
+                currentStepIndex = currentStepIndex,
+                isTrafficEnabled = isTrafficEnabled,
+                isSatellite = isSatellite,
+                isDark = isDark,
+                onCameraCenterChanged = { cameraCenterTarget = it },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
         // ── TOP BAR: Pencarian Android Auto & Kategori Cepat ───────────
         if (!isNavigating) {
@@ -745,9 +575,9 @@ fun AutoMapPane(
                                         .clickable {
                                             searchResults = emptyList()
                                             searchQuery = place.name
-                                            val startLatLng = userLocation?.let { LatLng(it.latitude, it.longitude) }
-                                                ?: mapRef?.cameraPosition?.target?.let { LatLng(it.latitude, it.longitude) }
-                                                ?: LatLng(-6.1754, 106.8272)
+                                            val startLatLng = userLocation?.let { GmsLatLng(it.latitude, it.longitude) }
+                                                ?: cameraCenterTarget
+                                                ?: GmsLatLng(-6.1754, 106.8272)
                                             isCalculatingRoute = true
                                             coroutineScope.launch {
                                                 val routes = GoogleMapsHelper.getRoutes(
@@ -801,22 +631,6 @@ fun AutoMapPane(
                 .padding(end = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // My Location
-            FloatingControlIconButton(
-                icon = Icons.Default.MyLocation,
-                contentDescription = "Pusatkan Lokasi",
-            ) {
-                if (userLocation != null && mapRef != null) {
-                    val cameraPosition = CameraPosition.Builder()
-                        .target(MapLibreLatLng(userLocation.latitude, userLocation.longitude))
-                        .zoom(if (isNavigating) 18.0 else 16.5)
-                        .bearing(if (isNavigating) effectiveBearing.toDouble() else bearing.toDouble())
-                        .tilt(if (isNavigating) 50.0 else 25.0)
-                        .build()
-                    mapRef?.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
-                }
-            }
-
             // Traffic Layer Toggle
             FloatingControlIconButton(
                 icon = Icons.Default.Traffic,
@@ -1030,9 +844,9 @@ fun AutoMapPane(
                     } else {
                         Button(
                             onClick = {
-                                val startLatLng = userLocation?.let { LatLng(it.latitude, it.longitude) }
-                                    ?: mapRef?.cameraPosition?.target?.let { LatLng(it.latitude, it.longitude) }
-                                    ?: LatLng(-6.1754, 106.8272)
+                                val startLatLng = userLocation?.let { GmsLatLng(it.latitude, it.longitude) }
+                                    ?: cameraCenterTarget
+                                    ?: GmsLatLng(-6.1754, 106.8272)
                                 isCalculatingRoute = true
                                 coroutineScope.launch {
                                     val routes = GoogleMapsHelper.getRoutes(
@@ -1058,7 +872,7 @@ fun AutoMapPane(
 
         // ── MODE NAVIGASI AKTIF: Tampilan Resmi Android Auto Coolwalk ────────
         if (isNavigating && activeRoute != null) {
-            val route = activeRoute!!
+            val route = activeRoute
             val steps = route.steps
             val currentStep = steps.getOrNull(currentStepIndex) ?: steps.firstOrNull()
             val nextStep = steps.getOrNull(currentStepIndex + 1)
@@ -1077,7 +891,7 @@ fun AutoMapPane(
                         bottomStart = if (nextStep != null) 0.dp else 16.dp,
                         bottomEnd = 16.dp,
                     ),
-                    color = Color(0xFF0F5A47), // Hijau tua Android Auto
+                    color = Color(0xFF0F5A47),
                     shadowElevation = 8.dp,
                 ) {
                     Row(
@@ -1251,6 +1065,550 @@ fun AutoMapPane(
     }
 }
 
+// ---------------------------------------------------------------------------
+// ENGINE 1: MapLibre Engine (Google Tiles - Rekomendasi Bebas GMS)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun MapLibreEngine(
+    hasLocationPermission: Boolean,
+    userLocation: GeoLocation?,
+    bearing: Float,
+    effectiveBearing: Float,
+    isNavigating: Boolean,
+    selectedPlace: AutoPlaceResult?,
+    availableRoutes: List<AutoRouteResult>,
+    selectedRouteIndex: Int,
+    activeRoute: AutoRouteResult?,
+    currentStepIndex: Int,
+    isTrafficEnabled: Boolean,
+    isSatellite: Boolean,
+    isDark: Boolean,
+    onCameraCenterChanged: (GmsLatLng) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
+    var isStyleLoaded by remember { mutableStateOf(false) }
+
+    val mapView = remember(context) {
+        MlMapView(context).apply {
+            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                val h = v.height
+                if (h > 0) {
+                    val topPadding = (h * 0.52f).toInt()
+                    mapRef?.setPadding(0, topPadding, 0, 0)
+                }
+            }
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START   -> mapView.onStart()
+                Lifecycle.Event.ON_RESUME  -> mapView.onResume()
+                Lifecycle.Event.ON_PAUSE   -> mapView.onPause()
+                Lifecycle.Event.ON_STOP    -> mapView.onStop()
+                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        mapView.onCreate(null)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            mapView.onStart()
+        }
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            mapView.onResume()
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            mapView.onDestroy()
+        }
+    }
+
+    LaunchedEffect(mapRef, isDark, isSatellite, isTrafficEnabled) {
+        val map = mapRef ?: return@LaunchedEffect
+        isStyleLoaded = false
+        val styleJson = getStyleJson(isDark, isSatellite, isTrafficEnabled)
+        map.setStyle(MlStyle.Builder().fromJson(styleJson)) { loadedStyle ->
+            setupMapLibreStyleLayers(loadedStyle, context)
+            isStyleLoaded = true
+            AppLogger.i("MapLibre", "MapLibre style berhasil dimuat (satelit=$isSatellite, dark=$isDark, traffic=$isTrafficEnabled)")
+        }
+    }
+
+    // Kamera mengikuti lokasi & rute
+    LaunchedEffect(mapRef, isStyleLoaded, userLocation, isNavigating, activeRoute, currentStepIndex, bearing, effectiveBearing) {
+        val map = mapRef ?: return@LaunchedEffect
+        if (!isStyleLoaded) return@LaunchedEffect
+
+        if (!isNavigating && activeRoute == null) {
+            val loc = userLocation
+            if (loc != null) {
+                val cameraPosition = MlCameraPosition.Builder()
+                    .target(MlLatLng(loc.latitude, loc.longitude))
+                    .zoom(16.5)
+                    .bearing(bearing.toDouble())
+                    .tilt(if (bearing > 0f) 25.0 else 0.0)
+                    .build()
+                map.animateCamera(MlCameraUpdateFactory.newCameraPosition(cameraPosition), 800)
+                onCameraCenterChanged(GmsLatLng(loc.latitude, loc.longitude))
+            }
+        } else if (isNavigating && activeRoute != null) {
+            val route = activeRoute
+            val steps = route.steps
+            val currentStep = steps.getOrNull(currentStepIndex)
+
+            val navTarget = if (userLocation != null) {
+                GmsLatLng(userLocation.latitude, userLocation.longitude)
+            } else if (currentStep != null && currentStepIndex > 0) {
+                currentStep.latLng
+            } else {
+                route.points.firstOrNull() ?: GmsLatLng(-6.1754, 106.8272)
+            }
+
+            val cameraPosition = MlCameraPosition.Builder()
+                .target(MlLatLng(navTarget.latitude, navTarget.longitude))
+                .zoom(18.0)
+                .bearing(effectiveBearing.toDouble())
+                .tilt(50.0)
+                .build()
+            map.animateCamera(MlCameraUpdateFactory.newCameraPosition(cameraPosition), 1000)
+            onCameraCenterChanged(navTarget)
+        }
+    }
+
+    // Perbarui penanda kendaraan dan pin tujuan
+    LaunchedEffect(mapRef, isStyleLoaded, userLocation, isNavigating, activeRoute, currentStepIndex, effectiveBearing, selectedPlace) {
+        val map = mapRef ?: return@LaunchedEffect
+        if (!isStyleLoaded) return@LaunchedEffect
+        val style = map.style ?: return@LaunchedEffect
+
+        // Destination Marker
+        val destSource = style.getSource(SOURCE_DEST) as? GeoJsonSource
+        val place = selectedPlace
+        if (place != null) {
+            destSource?.setGeoJson(Point.fromLngLat(place.latLng.longitude, place.latLng.latitude))
+        } else {
+            destSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+        }
+
+        // Vehicle Marker
+        val navTarget = if (isNavigating && activeRoute != null) {
+            val steps = activeRoute.steps
+            val currentStep = steps.getOrNull(currentStepIndex)
+            if (userLocation != null) {
+                GmsLatLng(userLocation.latitude, userLocation.longitude)
+            } else if (currentStep != null && currentStepIndex > 0) {
+                currentStep.latLng
+            } else {
+                activeRoute.points.firstOrNull() ?: GmsLatLng(-6.1754, 106.8272)
+            }
+        } else if (userLocation != null) {
+            GmsLatLng(userLocation.latitude, userLocation.longitude)
+        } else null
+
+        val vehicleSource = style.getSource(SOURCE_VEHICLE) as? GeoJsonSource
+        val vehicleLayer = style.getLayer(LAYER_VEHICLE) as? SymbolLayer
+        if (navTarget != null) {
+            vehicleSource?.setGeoJson(Point.fromLngLat(navTarget.longitude, navTarget.latitude))
+            if (isNavigating) {
+                vehicleLayer?.setProperties(
+                    PropertyFactory.iconImage(ICON_NAV_ARROW),
+                    PropertyFactory.iconRotate(effectiveBearing),
+                    PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                )
+            } else {
+                vehicleLayer?.setProperties(
+                    PropertyFactory.iconImage(ICON_LOCATION_DOT),
+                    PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_VIEWPORT),
+                )
+            }
+        } else {
+            vehicleSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+        }
+    }
+
+    // Perbarui rute polyline di peta
+    LaunchedEffect(mapRef, isStyleLoaded, availableRoutes, selectedRouteIndex, isNavigating) {
+        val map = mapRef ?: return@LaunchedEffect
+        if (!isStyleLoaded) return@LaunchedEffect
+        val style = map.style ?: return@LaunchedEffect
+
+        val activeSource = style.getSource(SOURCE_ACTIVE_ROUTE) as? GeoJsonSource
+        val currentRoute = if (isNavigating) {
+            activeRoute ?: availableRoutes.getOrNull(selectedRouteIndex)
+        } else {
+            availableRoutes.getOrNull(selectedRouteIndex)
+        }
+
+        if (currentRoute != null && currentRoute.points.isNotEmpty()) {
+            val coords = currentRoute.points.map { Point.fromLngLat(it.longitude, it.latitude) }
+            activeSource?.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))
+        } else {
+            activeSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+        }
+
+        for (i in 0 until 5) {
+            val srcId = "$SOURCE_ALT_ROUTE_PREFIX$i"
+            val altSource = style.getSource(srcId) as? GeoJsonSource
+            if (!isNavigating && i < availableRoutes.size && i != selectedRouteIndex) {
+                val r = availableRoutes[i]
+                val coords = r.points.map { Point.fromLngLat(it.longitude, it.latitude) }
+                altSource?.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))
+            } else {
+                altSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+            }
+        }
+
+        if (!isNavigating && availableRoutes.isNotEmpty()) {
+            try {
+                val boundsBuilder = MlLatLngBounds.Builder()
+                var count = 0
+                availableRoutes.forEach { r ->
+                    r.points.forEach { pt ->
+                        boundsBuilder.include(MlLatLng(pt.latitude, pt.longitude))
+                        count++
+                    }
+                }
+                if (count > 0) {
+                    map.easeCamera(MlCameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120))
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    AndroidView(
+        factory = {
+            mapView.getMapAsync { map ->
+                mapRef = map
+                map.uiSettings.isCompassEnabled = true
+                map.uiSettings.isLogoEnabled = false
+                map.uiSettings.isAttributionEnabled = false
+
+                val h = mapView.height
+                if (h > 0) {
+                    val topPadding = (h * 0.52f).toInt()
+                    map.setPadding(0, topPadding, 0, 0)
+                }
+
+                val startPos = if (userLocation != null) {
+                    MlLatLng(userLocation.latitude, userLocation.longitude)
+                } else {
+                    MlLatLng(-6.1754, 106.8272)
+                }
+                val initialCamera = MlCameraPosition.Builder()
+                    .target(startPos)
+                    .zoom(16.5)
+                    .bearing(bearing.toDouble())
+                    .tilt(if (bearing > 0f) 25.0 else 0.0)
+                    .build()
+                map.moveCamera(MlCameraUpdateFactory.newCameraPosition(initialCamera))
+            }
+            mapView
+        },
+        modifier = modifier,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// ENGINE 2: Google Maps Resmi (SDK)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun GoogleMapsOfficialEngine(
+    hasLocationPermission: Boolean,
+    userLocation: GeoLocation?,
+    bearing: Float,
+    effectiveBearing: Float,
+    isNavigating: Boolean,
+    selectedPlace: AutoPlaceResult?,
+    availableRoutes: List<AutoRouteResult>,
+    selectedRouteIndex: Int,
+    activeRoute: AutoRouteResult?,
+    currentStepIndex: Int,
+    isTrafficEnabled: Boolean,
+    isSatellite: Boolean,
+    isDark: Boolean,
+    onCameraCenterChanged: (GmsLatLng) -> Unit,
+    onSelectRoute: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var googleMap by remember { mutableStateOf<GoogleMap?>(null) }
+    var routePolylines by remember { mutableStateOf<List<GmsPolyline>>(emptyList()) }
+    var destinationMarker by remember { mutableStateOf<GmsMarker?>(null) }
+    var userNavMarker by remember { mutableStateOf<GmsMarker?>(null) }
+
+    val gmsStatus = remember {
+        GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
+    }
+    val isGmsAvailable = gmsStatus == ConnectionResult.SUCCESS
+
+    LaunchedEffect(isGmsAvailable) {
+        if (!isGmsAvailable) {
+            AppLogger.e("GoogleMapsSDK", "Google Play Services tidak tersedia / status error: kode $gmsStatus")
+        } else {
+            AppLogger.i("GoogleMapsSDK", "Google Play Services terdeteksi siap.")
+        }
+    }
+
+    val mapView = remember {
+        GmsMapView(context).apply {
+            onCreate(null)
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, mapView) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START   -> mapView.onStart()
+                Lifecycle.Event.ON_RESUME  -> mapView.onResume()
+                Lifecycle.Event.ON_PAUSE   -> mapView.onPause()
+                Lifecycle.Event.ON_STOP    -> mapView.onStop()
+                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            mapView.onStart()
+        }
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            mapView.onResume()
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            runCatching { mapView.onDestroy() }
+        }
+    }
+
+    // Kamera mengikuti lokasi & rute pada Google Maps SDK
+    LaunchedEffect(googleMap, userLocation, isNavigating, activeRoute, currentStepIndex, bearing, effectiveBearing) {
+        val map = googleMap ?: return@LaunchedEffect
+
+        if (!isNavigating && activeRoute == null) {
+            val loc = userLocation
+            if (loc != null) {
+                val latLng = GmsLatLng(loc.latitude, loc.longitude)
+                val cameraPosition = GmsCameraPosition.Builder()
+                    .target(latLng)
+                    .zoom(16.5f)
+                    .bearing(bearing)
+                    .tilt(if (bearing > 0f) 25f else 0f)
+                    .build()
+                map.animateCamera(GmsCameraUpdateFactory.newCameraPosition(cameraPosition), 800, null)
+                onCameraCenterChanged(latLng)
+            }
+        } else if (isNavigating && activeRoute != null) {
+            val route = activeRoute
+            val steps = route.steps
+            val currentStep = steps.getOrNull(currentStepIndex)
+
+            val navTarget = if (userLocation != null) {
+                GmsLatLng(userLocation.latitude, userLocation.longitude)
+            } else if (currentStep != null && currentStepIndex > 0) {
+                currentStep.latLng
+            } else {
+                route.points.firstOrNull() ?: GmsLatLng(-6.1754, 106.8272)
+            }
+
+            val cameraPosition = GmsCameraPosition.Builder()
+                .target(navTarget)
+                .zoom(18.5f)
+                .bearing(effectiveBearing)
+                .tilt(55f)
+                .build()
+            map.animateCamera(GmsCameraUpdateFactory.newCameraPosition(cameraPosition), 1000, null)
+            onCameraCenterChanged(navTarget)
+
+            userNavMarker?.remove()
+            val navIconBmp = createNavArrowBitmap(context)
+            val navIcon = BitmapDescriptorFactory.fromBitmap(navIconBmp)
+            val markerOptions = GmsMarkerOptions()
+                .position(navTarget)
+                .icon(navIcon)
+                .rotation(effectiveBearing)
+                .flat(true)
+                .anchor(0.5f, 0.5f)
+            userNavMarker = map.addMarker(markerOptions)
+        } else if (!isNavigating) {
+            userNavMarker?.remove()
+            userNavMarker = null
+        }
+    }
+
+    // Polylines & Destination Marker pada Google Maps SDK
+    LaunchedEffect(googleMap, availableRoutes, selectedRouteIndex, isNavigating, selectedPlace) {
+        val map = googleMap ?: return@LaunchedEffect
+        routePolylines.forEach { it.remove() }
+        routePolylines = emptyList()
+        destinationMarker?.remove()
+        destinationMarker = null
+
+        val place = selectedPlace
+        if (place != null) {
+            destinationMarker = map.addMarker(
+                GmsMarkerOptions()
+                    .position(place.latLng)
+                    .title(place.name),
+            )
+        }
+
+        if (availableRoutes.isEmpty()) return@LaunchedEffect
+
+        val newPolylines = mutableListOf<GmsPolyline>()
+        if (isNavigating) {
+            val route = activeRoute ?: availableRoutes.getOrNull(selectedRouteIndex) ?: return@LaunchedEffect
+            val polyOptions = GmsPolylineOptions()
+                .addAll(route.points)
+                .width(16f)
+                .color(AndroidColor.parseColor("#1A73E8"))
+                .startCap(GmsRoundCap())
+                .endCap(GmsRoundCap())
+                .jointType(GmsJointType.ROUND)
+                .geodesic(true)
+                .zIndex(2f)
+            newPolylines.add(map.addPolyline(polyOptions))
+        } else {
+            availableRoutes.forEachIndexed { index, route ->
+                val isSelected = index == selectedRouteIndex
+                val colorHex = if (isSelected) "#1A73E8" else "#80868B"
+                val width = if (isSelected) 16f else 12f
+                val zIndex = if (isSelected) 2f else 1f
+
+                val polyOptions = GmsPolylineOptions()
+                    .addAll(route.points)
+                    .width(width)
+                    .color(AndroidColor.parseColor(colorHex))
+                    .startCap(GmsRoundCap())
+                    .endCap(GmsRoundCap())
+                    .jointType(GmsJointType.ROUND)
+                    .geodesic(true)
+                    .zIndex(zIndex)
+                    .clickable(true)
+
+                newPolylines.add(map.addPolyline(polyOptions))
+            }
+
+            try {
+                val boundsBuilder = GmsLatLngBounds.builder()
+                var count = 0
+                availableRoutes.forEach { r ->
+                    r.points.forEach { pt ->
+                        boundsBuilder.include(pt)
+                        count++
+                    }
+                }
+                if (count > 0) {
+                    map.animateCamera(GmsCameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120))
+                }
+            } catch (_: Exception) {}
+        }
+        routePolylines = newPolylines
+    }
+
+    Box(modifier = modifier) {
+        AndroidView(
+            factory = {
+                mapView.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
+                    val h = bottom - top
+                    if (h > 0) {
+                        val topPadding = (h * 0.54f).toInt()
+                        googleMap?.setPadding(0, topPadding, 0, 0)
+                    }
+                }
+                mapView.getMapAsync { map ->
+                    googleMap = map
+                    AppLogger.i("GoogleMapsSDK", "GoogleMap instance berhasil siap (onMapReady)")
+                    map.uiSettings.isCompassEnabled = true
+                    map.uiSettings.isMapToolbarEnabled = false
+                    map.uiSettings.isMyLocationButtonEnabled = false
+                    map.isTrafficEnabled = isTrafficEnabled
+                    map.mapType = if (isSatellite) GoogleMap.MAP_TYPE_HYBRID else GoogleMap.MAP_TYPE_NORMAL
+
+                    val h = mapView.height
+                    if (h > 0) {
+                        val topPadding = (h * 0.54f).toInt()
+                        map.setPadding(0, topPadding, 0, 0)
+                    }
+
+                    if (hasLocationPermission) {
+                        try {
+                            map.isMyLocationEnabled = true
+                        } catch (_: SecurityException) {}
+                    }
+
+                    map.setOnPolylineClickListener { clickedPolyline ->
+                        val clickedIdx = routePolylines.indexOf(clickedPolyline)
+                        if (clickedIdx >= 0) {
+                            onSelectRoute(clickedIdx)
+                        }
+                    }
+
+                    if (isDark) {
+                        applyGoogleMapDarkStyle(map)
+                    }
+
+                    val startPos = if (userLocation != null) {
+                        GmsLatLng(userLocation.latitude, userLocation.longitude)
+                    } else {
+                        GmsLatLng(-6.1754, 106.8272)
+                    }
+                    val initialCamera = GmsCameraPosition.Builder()
+                        .target(startPos)
+                        .zoom(16.5f)
+                        .bearing(bearing)
+                        .tilt(if (bearing > 0f) 25f else 0f)
+                        .build()
+                    map.moveCamera(GmsCameraUpdateFactory.newCameraPosition(initialCamera))
+                }
+                mapView
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        // Banner peringatan jika Google Play Services tidak tersedia
+        if (!isGmsAvailable) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 20.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
+                shadowElevation = 8.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Google Play Services tidak terpasang di Head Unit ini. Peta Google resmi mungkin blank. Disarankan beralih ke engine MapLibre di Pengaturan.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers & Bitmaps
+// ---------------------------------------------------------------------------
+
 private fun getStyleJson(isDark: Boolean, isSatellite: Boolean, isTraffic: Boolean): String {
     return when {
         isSatellite -> GOOGLE_HYBRID_TRAFFIC_STYLE_JSON
@@ -1260,7 +1618,7 @@ private fun getStyleJson(isDark: Boolean, isSatellite: Boolean, isTraffic: Boole
     }
 }
 
-private fun setupStyleLayers(style: Style, context: Context) {
+private fun setupMapLibreStyleLayers(style: MlStyle, context: Context) {
     if (style.getImage(ICON_NAV_ARROW) == null) {
         style.addImage(ICON_NAV_ARROW, createNavArrowBitmap(context))
     }
@@ -1271,7 +1629,6 @@ private fun setupStyleLayers(style: Style, context: Context) {
         style.addImage(ICON_DEST_PIN, createDestinationPinBitmap(context))
     }
 
-    // Alt routes sources & layers
     for (i in 0 until 5) {
         val srcId = "$SOURCE_ALT_ROUTE_PREFIX$i"
         val layerId = "$LAYER_ALT_ROUTE_PREFIX$i"
@@ -1289,7 +1646,6 @@ private fun setupStyleLayers(style: Style, context: Context) {
         }
     }
 
-    // Active route source & layer
     if (style.getSource(SOURCE_ACTIVE_ROUTE) == null) {
         style.addSource(GeoJsonSource(SOURCE_ACTIVE_ROUTE))
     }
@@ -1303,7 +1659,6 @@ private fun setupStyleLayers(style: Style, context: Context) {
         style.addLayer(layer)
     }
 
-    // Destination pin source & layer
     if (style.getSource(SOURCE_DEST) == null) {
         style.addSource(GeoJsonSource(SOURCE_DEST))
     }
@@ -1317,7 +1672,6 @@ private fun setupStyleLayers(style: Style, context: Context) {
         style.addLayer(layer)
     }
 
-    // Vehicle marker source & layer
     if (style.getSource(SOURCE_VEHICLE) == null) {
         style.addSource(GeoJsonSource(SOURCE_VEHICLE))
     }
@@ -1330,6 +1684,34 @@ private fun setupStyleLayers(style: Style, context: Context) {
         )
         style.addLayer(layer)
     }
+}
+
+private fun applyGoogleMapDarkStyle(map: GoogleMap) {
+    val darkJson = """
+    [
+      { "elementType": "geometry", "stylers": [{ "color": "#18222d" }] },
+      { "elementType": "labels.text.stroke", "stylers": [{ "color": "#18222d" }] },
+      { "elementType": "labels.text.fill", "stylers": [{ "color": "#8c9ba5" }] },
+      { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#c4d1db" }] },
+      { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#8c9ba5" }] },
+      { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#1a2c30" }] },
+      { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#5b8c74" }] },
+      { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#283747" }] },
+      { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e2a36" }] },
+      { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
+      { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#33475b" }] },
+      { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#202e3b" }] },
+      { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#cbd5e1" }] },
+      { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#223243" }] },
+      { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
+      { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#101923" }] },
+      { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#516375" }] },
+      { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#101923" }] }
+    ]
+    """.trimIndent()
+    try {
+        map.setMapStyle(GmsMapStyleOptions(darkJson))
+    } catch (_: Exception) {}
 }
 
 @Composable
@@ -1390,9 +1772,6 @@ private fun ManeuverIcon(maneuver: String?, modifier: Modifier = Modifier) {
     )
 }
 
-/**
- * Membuat icon navigasi Android Auto: Lingkaran biru dengan border putih dan panah segitiga tajam.
- */
 private fun createNavArrowBitmap(context: Context): Bitmap {
     val density = context.resources.displayMetrics.density
     val sizePx = (44 * density).toInt()
@@ -1437,9 +1816,6 @@ private fun createNavArrowBitmap(context: Context): Bitmap {
     return bitmap
 }
 
-/**
- * Membuat icon titik lokasi (Location Dot): Titik biru dengan halo transparan dan border putih.
- */
 private fun createLocationDotBitmap(context: Context): Bitmap {
     val density = context.resources.displayMetrics.density
     val sizePx = (32 * density).toInt()
@@ -1467,9 +1843,6 @@ private fun createLocationDotBitmap(context: Context): Bitmap {
     return bitmap
 }
 
-/**
- * Membuat icon pin tujuan (Destination Pin Marker) berwarna merah khas Google Maps.
- */
 private fun createDestinationPinBitmap(context: Context): Bitmap {
     val density = context.resources.displayMetrics.density
     val widthPx = (30 * density).toInt()
@@ -1500,9 +1873,6 @@ private fun createDestinationPinBitmap(context: Context): Bitmap {
     return bitmap
 }
 
-/**
- * Menghitung sudut arah (bearing/heading) dari satu koordinat ke koordinat berikutnya.
- */
 private fun calculateBearing(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
     val rLat1 = Math.toRadians(lat1)
     val rLon1 = Math.toRadians(lon1)
@@ -1515,10 +1885,7 @@ private fun calculateBearing(lat1: Double, lon1: Double, lat2: Double, lon2: Dou
     return (brng + 360f) % 360f
 }
 
-/**
- * Menghitung sudut arah awal perjalanan rute agar peta berputar menghadap ke arah jalan navigasi.
- */
-private fun calculateInitialRouteBearing(points: List<LatLng>): Float {
+private fun calculateInitialRouteBearing(points: List<GmsLatLng>): Float {
     if (points.size < 2) return 0f
     val start = points[0]
     for (i in 1 until points.size) {

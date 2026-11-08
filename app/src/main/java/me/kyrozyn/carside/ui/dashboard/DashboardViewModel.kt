@@ -66,6 +66,8 @@ data class DashboardUiState(
     val lyricsFullscreenOpen: Boolean,
     /** Mode Auto (Google Maps bergaya Android Auto). */
     val autoModeEnabled: Boolean = false,
+    /** Engine peta yang digunakan untuk Mode Auto (MapLibre vs Google Maps Resmi SDK). */
+    val autoMapEngine: me.kyrozyn.carside.data.settings.AutoMapEngine = me.kyrozyn.carside.data.settings.AutoMapEngine.MAPLIBRE,
     /** Google Maps Platform API Key (untuk Maps SDK, Directions, dan Places). */
     val googleMapsApiKey: String? = null,
 )
@@ -106,6 +108,8 @@ class DashboardViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, List(4) { null })
     private val autoModeEnabled = container.settingsRepository.autoModeEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val autoMapEngine = container.settingsRepository.autoMapEngine
+        .stateIn(viewModelScope, SharingStarted.Eagerly, me.kyrozyn.carside.data.settings.AutoMapEngine.MAPLIBRE)
     private val googleMapsApiKey = container.settingsRepository.googleMapsApiKey
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -133,8 +137,8 @@ class DashboardViewModel(
         combine(_userLocation, container.tripRepository.activeTripState) { userLoc, activeTrip ->
             Pair(userLoc, activeTrip)
         },
-        combine(autoModeEnabled, googleMapsApiKey) { autoEnabled, apiKey ->
-            Pair(autoEnabled, apiKey)
+        combine(autoModeEnabled, googleMapsApiKey, autoMapEngine) { autoEnabled, apiKey, engine ->
+            Triple(autoEnabled, apiKey, engine)
         },
     ) { mediaClock, shortcutsState, compassBrowsePermMode, userLocActiveTrip, autoSettings ->
         val compass = compassBrowsePermMode.first
@@ -164,6 +168,7 @@ class DashboardViewModel(
             lyricsFullscreenOpen = shortcutsState.fifth,
             autoModeEnabled = autoSettings.first,
             googleMapsApiKey = autoSettings.second,
+            autoMapEngine = autoSettings.third,
         )
     }.stateIn(
         viewModelScope,
@@ -191,6 +196,7 @@ class DashboardViewModel(
             lyricsState = LyricsState.Idle,
             lyricsFullscreenOpen = false,
             autoModeEnabled = container.settingsRepository.autoModeEnabled.value,
+            autoMapEngine = container.settingsRepository.autoMapEngine.value,
             googleMapsApiKey = container.settingsRepository.googleMapsApiKey.value,
         ),
     )

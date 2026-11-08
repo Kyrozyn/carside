@@ -167,6 +167,7 @@ fun DashboardScreen(
                             userLocation = uiState.userLocation,
                             bearing = uiState.mapBearingDegrees,
                             apiKey = uiState.googleMapsApiKey,
+                            autoMapEngine = uiState.autoMapEngine,
                             autoNavigationManager = autoNavigationManager,
                             onOpenSettings = onOpenSettings,
                             modifier = Modifier.fillMaxSize(),

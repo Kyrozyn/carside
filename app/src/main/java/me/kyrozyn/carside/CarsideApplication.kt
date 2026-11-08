@@ -17,6 +17,8 @@ class CarsideApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        setupCrashHandler()
+        me.kyrozyn.carside.core.AppLogger.i("App", "Carside Application dimulai")
         MapLibre.getInstance(this)
         OfflineManager.getInstance(this).setOfflineMapboxTileCountLimit(200_000L)
         initOsmdroid()
@@ -24,6 +26,14 @@ class CarsideApplication : Application() {
         container = AppContainer(this)
         val apiKey = container.settingsRepository.googleMapsApiKey.value
         me.kyrozyn.carside.core.GoogleMapsHelper.applyApiKey(this, apiKey)
+    }
+
+    private fun setupCrashHandler() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            me.kyrozyn.carside.core.AppLogger.e("Crash", "Uncaught Exception pada thread: ${thread.name}", throwable)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
     }
 
     private fun initCoil() {
