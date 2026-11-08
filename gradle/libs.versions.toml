@@ -1,6 +1,6 @@
 [versions]
-agp = "9.1.0"
-kotlin = "2.1.10"
+agp = "9.5.1"
+kotlin = "2.2.10"
 coreKtx = "1.15.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -18,7 +18,7 @@ okhttp = "4.12.0"
 coilCompose = "2.7.0"
 media3 = "1.4.1"
 room = "2.7.0"
-ksp = "2.1.10-1.0.29"
+ksp = "2.3.6"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
