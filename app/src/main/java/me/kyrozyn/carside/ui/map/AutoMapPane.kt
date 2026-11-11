@@ -1524,7 +1524,9 @@ private fun MapLibreEngine(
                 }
                 map.addOnCameraIdleListener {
                     val target = map.cameraPosition.target
-                    onCameraCenterChanged(GmsLatLng(target.latitude, target.longitude))
+                    if (target != null) {
+                        onCameraCenterChanged(GmsLatLng(target.latitude, target.longitude))
+                    }
                 }
                 val initialCamera = MlCameraPosition.Builder()
                     .target(startPos)
@@ -1879,7 +1881,7 @@ private fun GoogleMapsOfficialEngine(
                     }
                     map.setOnCameraIdleListener {
                         val target = map.cameraPosition.target
-                        onCameraCenterChanged(target)
+                        target?.let { onCameraCenterChanged(it) }
                     }
 
                     val h = mapView.height
@@ -2015,12 +2017,11 @@ private fun setupMapLibreStyleLayers(style: MlStyle, context: Context, userLocat
     }
 
     if (style.getSource(SOURCE_VEHICLE) == null) {
-        val initialGeoJson = if (userLocation != null) {
-            Feature.fromGeometry(Point.fromLngLat(userLocation.longitude, userLocation.latitude))
-        } else {
-            FeatureCollection.fromFeatures(emptyList())
+        val src = GeoJsonSource(SOURCE_VEHICLE)
+        if (userLocation != null) {
+            src.setGeoJson(Feature.fromGeometry(Point.fromLngLat(userLocation.longitude, userLocation.latitude)))
         }
-        style.addSource(GeoJsonSource(SOURCE_VEHICLE, initialGeoJson))
+        style.addSource(src)
     } else if (userLocation != null) {
         (style.getSource(SOURCE_VEHICLE) as? GeoJsonSource)?.setGeoJson(
             Feature.fromGeometry(Point.fromLngLat(userLocation.longitude, userLocation.latitude))
