@@ -1,5 +1,8 @@
 package me.kyrozyn.carside.ui.dashboard
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -79,7 +82,16 @@ class DashboardViewModel(
 
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
 
-    private val _locationPermission = MutableStateFlow(false)
+    private val _locationPermission = MutableStateFlow(
+        ContextCompat.checkSelfPermission(
+            container.appContext,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        ) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                container.appContext,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED,
+    )
     private val _browseOpen = MutableStateFlow(false)
     private val _weather = MutableStateFlow<WeatherUi>(WeatherUi.Idle)
     private val _clock = MutableStateFlow(formatTime())

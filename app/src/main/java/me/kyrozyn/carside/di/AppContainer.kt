@@ -34,7 +34,7 @@ import me.kyrozyn.carside.domain.repository.WeatherRepository
 
 class AppContainer(context: Context) {
 
-    private val appContext = context.applicationContext
+    val appContext: Context = context.applicationContext
 
     val locationProvider: LocationProvider = FusedLocationDataSource(appContext)
     val weatherRepository: WeatherRepository = OpenMeteoWeatherRepository()

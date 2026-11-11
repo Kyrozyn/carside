@@ -117,6 +117,7 @@ import org.maplibre.android.geometry.LatLngBounds as MlLatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView as MlMapView
 import org.maplibre.android.maps.Style as MlStyle
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
@@ -135,6 +136,7 @@ private const val SOURCE_ALT_ROUTE_PREFIX = "auto-alt-route-source-"
 private const val LAYER_ALT_ROUTE_PREFIX = "auto-alt-route-layer-"
 private const val SOURCE_VEHICLE = "auto-vehicle-source"
 private const val LAYER_VEHICLE = "auto-vehicle-layer"
+private const val LAYER_VEHICLE_CIRCLE = "auto-vehicle-circle-layer"
 private const val SOURCE_DEST = "auto-dest-source"
 private const val LAYER_DEST = "auto-dest-layer"
 private const val ICON_NAV_ARROW = "icon-nav-arrow"
@@ -328,7 +330,22 @@ fun AutoMapPane(
     var isTrafficEnabled by remember { mutableStateOf(true) }
     var isSatellite by remember { mutableStateOf(false) }
     var recenterTrigger by remember { mutableStateOf(0L) }
+    var isCameraFollowingUser by remember { mutableStateOf(true) }
     var lastRerouteAtMs by remember { mutableStateOf(0L) }
+
+    // Saat navigasi dimulai, aktifkan kembali fokus kamera ke kendaraan
+    LaunchedEffect(isNavigating) {
+        if (isNavigating) {
+            isCameraFollowingUser = true
+        }
+    }
+
+    // Saat pratinjau rute muncul sebelum mulai jalan, jangan paksa kunci kamera ke pengguna
+    LaunchedEffect(availableRoutes.isNotEmpty()) {
+        if (availableRoutes.isNotEmpty() && !isNavigating) {
+            isCameraFollowingUser = false
+        }
+    }
 
     // Search state
     var searchQuery by remember { mutableStateOf("") }
@@ -439,6 +456,8 @@ fun AutoMapPane(
                 onSelectRoute = { autoNavigationManager?.selectRoute(it) },
                 onSwitchToMapLibre = onSwitchToMapLibre,
                 recenterTrigger = recenterTrigger,
+                isCameraFollowingUser = isCameraFollowingUser,
+                onUserGesture = { isCameraFollowingUser = false },
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -460,6 +479,8 @@ fun AutoMapPane(
                 isDark = isDark,
                 onCameraCenterChanged = { cameraCenterTarget = it },
                 recenterTrigger = recenterTrigger,
+                isCameraFollowingUser = isCameraFollowingUser,
+                onUserGesture = { isCameraFollowingUser = false },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -730,8 +751,9 @@ fun AutoMapPane(
             FloatingControlIconButton(
                 icon = Icons.Default.MyLocation,
                 contentDescription = "Lokasi Saya",
-                isActive = false,
+                isActive = !isCameraFollowingUser,
             ) {
+                isCameraFollowingUser = true
                 recenterTrigger = System.currentTimeMillis()
             }
 
@@ -796,6 +818,7 @@ fun AutoMapPane(
                         }
                         IconButton(
                             onClick = {
+                                isCameraFollowingUser = true
                                 autoNavigationManager?.stopNavigation()
                             },
                         ) {
@@ -928,6 +951,8 @@ fun AutoMapPane(
 
                                 Button(
                                     onClick = {
+                                        isCameraFollowingUser = true
+                                        recenterTrigger = System.currentTimeMillis()
                                         autoNavigationManager?.startNavigation()
                                     },
                                     shape = RoundedCornerShape(16.dp),
@@ -1136,7 +1161,11 @@ fun AutoMapPane(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     IconButton(
-                        onClick = { autoNavigationManager?.stopNavigation() },
+                        onClick = {
+                            isCameraFollowingUser = true
+                            recenterTrigger = System.currentTimeMillis()
+                            autoNavigationManager?.stopNavigation()
+                        },
                         modifier = Modifier.size(24.dp),
                     ) {
                         Icon(
@@ -1227,6 +1256,8 @@ private fun MapLibreEngine(
     isDark: Boolean,
     onCameraCenterChanged: (GmsLatLng) -> Unit,
     recenterTrigger: Long = 0L,
+    isCameraFollowingUser: Boolean = true,
+    onUserGesture: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -1276,7 +1307,7 @@ private fun MapLibreEngine(
         isStyleLoaded = false
         val styleJson = getStyleJson(isDark, isSatellite, isTrafficEnabled)
         map.setStyle(MlStyle.Builder().fromJson(styleJson)) { loadedStyle ->
-            setupMapLibreStyleLayers(loadedStyle, context)
+            setupMapLibreStyleLayers(loadedStyle, context, userLocation)
             isStyleLoaded = true
             AppLogger.i("MapLibre", "MapLibre style berhasil dimuat (satelit=$isSatellite, dark=$isDark, traffic=$isTrafficEnabled)")
         }
@@ -1288,28 +1319,33 @@ private fun MapLibreEngine(
         val map = mapRef ?: return@LaunchedEffect
         val loc = userLocation ?: return@LaunchedEffect
         val latLng = MlLatLng(loc.latitude, loc.longitude)
+        val targetZoom = if (isNavigating) 18.0 else 17.0
+        val targetTilt = if (isNavigating) 50.0 else (if (bearing > 0f) 25.0 else 0.0)
+        val targetBearing = if (isNavigating) effectiveBearing.toDouble() else bearing.toDouble()
         val cameraPosition = MlCameraPosition.Builder()
             .target(latLng)
-            .zoom(17.0)
-            .bearing(bearing.toDouble())
-            .tilt(if (bearing > 0f) 25.0 else 0.0)
+            .zoom(targetZoom)
+            .bearing(targetBearing)
+            .tilt(targetTilt)
             .build()
         map.animateCamera(MlCameraUpdateFactory.newCameraPosition(cameraPosition), 600)
         onCameraCenterChanged(GmsLatLng(loc.latitude, loc.longitude))
         AppLogger.i("MapLibre", "Re-center ke lokasi pengguna: (${loc.latitude}, ${loc.longitude})")
     }
 
-    // Kamera mengikuti lokasi & rute
-    LaunchedEffect(mapRef, isStyleLoaded, userLocation, isNavigating, activeRoute, currentStepIndex, bearing, effectiveBearing) {
+    // Kamera mengikuti lokasi & rute (hanya saat isCameraFollowingUser aktif)
+    LaunchedEffect(mapRef, isStyleLoaded, userLocation, isNavigating, activeRoute, currentStepIndex, bearing, effectiveBearing, isCameraFollowingUser) {
         val map = mapRef ?: return@LaunchedEffect
         if (!isStyleLoaded) return@LaunchedEffect
+        if (!isCameraFollowingUser) return@LaunchedEffect
 
         if (!isNavigating && activeRoute == null) {
             val loc = userLocation
             if (loc != null) {
+                val currentZoom = map.cameraPosition.zoom.coerceIn(10.0, 18.5)
                 val cameraPosition = MlCameraPosition.Builder()
                     .target(MlLatLng(loc.latitude, loc.longitude))
-                    .zoom(16.5)
+                    .zoom(currentZoom)
                     .bearing(bearing.toDouble())
                     .tilt(if (bearing > 0f) 25.0 else 0.0)
                     .build()
@@ -1350,7 +1386,7 @@ private fun MapLibreEngine(
         val destSource = style.getSource(SOURCE_DEST) as? GeoJsonSource
         val place = selectedPlace
         if (place != null) {
-            destSource?.setGeoJson(Point.fromLngLat(place.latLng.longitude, place.latLng.latitude))
+            destSource?.setGeoJson(Feature.fromGeometry(Point.fromLngLat(place.latLng.longitude, place.latLng.latitude)))
         } else {
             destSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
         }
@@ -1372,21 +1408,28 @@ private fun MapLibreEngine(
 
         val vehicleSource = style.getSource(SOURCE_VEHICLE) as? GeoJsonSource
         val vehicleLayer = style.getLayer(LAYER_VEHICLE) as? SymbolLayer
+        val vehicleCircleLayer = style.getLayer(LAYER_VEHICLE_CIRCLE) as? CircleLayer
         if (navTarget != null) {
-            vehicleSource?.setGeoJson(Point.fromLngLat(navTarget.longitude, navTarget.latitude))
+            vehicleSource?.setGeoJson(Feature.fromGeometry(Point.fromLngLat(navTarget.longitude, navTarget.latitude)))
             if (isNavigating) {
+                vehicleCircleLayer?.setProperties(PropertyFactory.circleOpacity(0f))
                 vehicleLayer?.setProperties(
                     PropertyFactory.iconImage(ICON_NAV_ARROW),
                     PropertyFactory.iconRotate(effectiveBearing),
                     PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                 )
             } else {
+                vehicleCircleLayer?.setProperties(
+                    PropertyFactory.circleOpacity(0.35f),
+                    PropertyFactory.circleRadius(12f),
+                )
                 vehicleLayer?.setProperties(
                     PropertyFactory.iconImage(ICON_LOCATION_DOT),
                     PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_VIEWPORT),
                 )
             }
         } else {
+            vehicleCircleLayer?.setProperties(PropertyFactory.circleOpacity(0f))
             vehicleSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
         }
     }
@@ -1474,6 +1517,15 @@ private fun MapLibreEngine(
                 } else {
                     MlLatLng(-6.1754, 106.8272)
                 }
+                map.addOnCameraMoveStartedListener { reason ->
+                    if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                        onUserGesture()
+                    }
+                }
+                map.addOnCameraIdleListener {
+                    val target = map.cameraPosition.target
+                    onCameraCenterChanged(GmsLatLng(target.latitude, target.longitude))
+                }
                 val initialCamera = MlCameraPosition.Builder()
                     .target(startPos)
                     .zoom(16.5)
@@ -1513,6 +1565,8 @@ private fun GoogleMapsOfficialEngine(
     onSelectRoute: (Int) -> Unit,
     onSwitchToMapLibre: () -> Unit,
     recenterTrigger: Long = 0L,
+    isCameraFollowingUser: Boolean = true,
+    onUserGesture: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -1580,11 +1634,14 @@ private fun GoogleMapsOfficialEngine(
         val map = googleMap ?: return@LaunchedEffect
         val loc = userLocation ?: return@LaunchedEffect
         val latLng = GmsLatLng(loc.latitude, loc.longitude)
+        val targetZoom = if (isNavigating) 18.5f else 17.0f
+        val targetTilt = if (isNavigating) 55f else (if (bearing > 0f) 25f else 0f)
+        val targetBearing = if (isNavigating) effectiveBearing else bearing
         val cameraPosition = GmsCameraPosition.Builder()
             .target(latLng)
-            .zoom(17.0f)
-            .bearing(bearing)
-            .tilt(if (bearing > 0f) 25f else 0f)
+            .zoom(targetZoom)
+            .bearing(targetBearing)
+            .tilt(targetTilt)
             .build()
         map.animateCamera(GmsCameraUpdateFactory.newCameraPosition(cameraPosition), 600, null)
         onCameraCenterChanged(latLng)
@@ -1621,56 +1678,84 @@ private fun GoogleMapsOfficialEngine(
         }
     }
 
-    // Kamera mengikuti lokasi & rute pada Google Maps SDK
-    LaunchedEffect(googleMap, userLocation, isNavigating, activeRoute, currentStepIndex, bearing, effectiveBearing) {
+    // Tangani status izin lokasi secara reaktif pada Google Maps SDK
+    LaunchedEffect(googleMap, hasLocationPermission) {
+        val map = googleMap ?: return@LaunchedEffect
+        if (hasLocationPermission) {
+            try {
+                map.isMyLocationEnabled = true
+            } catch (_: SecurityException) {}
+        }
+    }
+
+    // Kamera & penanda lokasi mengikuti lokasi & rute pada Google Maps SDK
+    LaunchedEffect(googleMap, userLocation, isNavigating, activeRoute, currentStepIndex, bearing, effectiveBearing, isCameraFollowingUser) {
         val map = googleMap ?: return@LaunchedEffect
 
-        if (!isNavigating && activeRoute == null) {
-            val loc = userLocation
-            if (loc != null) {
-                val latLng = GmsLatLng(loc.latitude, loc.longitude)
-                val cameraPosition = GmsCameraPosition.Builder()
-                    .target(latLng)
-                    .zoom(16.5f)
-                    .bearing(bearing)
-                    .tilt(if (bearing > 0f) 25f else 0f)
-                    .build()
-                map.animateCamera(GmsCameraUpdateFactory.newCameraPosition(cameraPosition), 800, null)
-                onCameraCenterChanged(latLng)
-            }
-        } else if (isNavigating && activeRoute != null) {
-            val route = activeRoute
-            val steps = route.steps
+        val navTarget = if (isNavigating && activeRoute != null) {
+            val steps = activeRoute.steps
             val currentStep = steps.getOrNull(currentStepIndex)
-
-            val navTarget = if (userLocation != null) {
+            if (userLocation != null) {
                 GmsLatLng(userLocation.latitude, userLocation.longitude)
             } else if (currentStep != null && currentStepIndex > 0) {
                 currentStep.latLng
             } else {
-                route.points.firstOrNull() ?: GmsLatLng(-6.1754, 106.8272)
+                activeRoute.points.firstOrNull() ?: GmsLatLng(-6.1754, 106.8272)
             }
+        } else if (userLocation != null) {
+            GmsLatLng(userLocation.latitude, userLocation.longitude)
+        } else null
 
-            val cameraPosition = GmsCameraPosition.Builder()
-                .target(navTarget)
-                .zoom(18.5f)
-                .bearing(effectiveBearing)
-                .tilt(55f)
-                .build()
-            map.animateCamera(GmsCameraUpdateFactory.newCameraPosition(cameraPosition), 1000, null)
-            onCameraCenterChanged(navTarget)
+        if (isCameraFollowingUser) {
+            if (!isNavigating && activeRoute == null) {
+                val loc = userLocation
+                if (loc != null) {
+                    val latLng = GmsLatLng(loc.latitude, loc.longitude)
+                    val currentZoom = map.cameraPosition.zoom.coerceIn(10f, 18.5f)
+                    val cameraPosition = GmsCameraPosition.Builder()
+                        .target(latLng)
+                        .zoom(currentZoom)
+                        .bearing(bearing)
+                        .tilt(if (bearing > 0f) 25f else 0f)
+                        .build()
+                    map.animateCamera(GmsCameraUpdateFactory.newCameraPosition(cameraPosition), 800, null)
+                    onCameraCenterChanged(latLng)
+                }
+            } else if (isNavigating && activeRoute != null && navTarget != null) {
+                val cameraPosition = GmsCameraPosition.Builder()
+                    .target(navTarget)
+                    .zoom(18.5f)
+                    .bearing(effectiveBearing)
+                    .tilt(55f)
+                    .build()
+                map.animateCamera(GmsCameraUpdateFactory.newCameraPosition(cameraPosition), 1000, null)
+                onCameraCenterChanged(navTarget)
+            }
+        }
 
-            userNavMarker?.remove()
-            val navIconBmp = createNavArrowBitmap(context)
-            val navIcon = BitmapDescriptorFactory.fromBitmap(navIconBmp)
-            val markerOptions = GmsMarkerOptions()
-                .position(navTarget)
-                .icon(navIcon)
-                .rotation(effectiveBearing)
-                .flat(true)
-                .anchor(0.5f, 0.5f)
-            userNavMarker = map.addMarker(markerOptions)
-        } else if (!isNavigating) {
+        // Tampilkan / perbarui marker posisi pengguna (panah saat navigasi, titik biru saat standby/awal masuk)
+        if (navTarget != null) {
+            val iconBmp = if (isNavigating) createNavArrowBitmap(context) else createLocationDotBitmap(context)
+            val iconDesc = BitmapDescriptorFactory.fromBitmap(iconBmp)
+            val rot = if (isNavigating) effectiveBearing else 0f
+            val existing = userNavMarker
+            if (existing == null) {
+                userNavMarker = map.addMarker(
+                    GmsMarkerOptions()
+                        .position(navTarget)
+                        .icon(iconDesc)
+                        .rotation(rot)
+                        .flat(true)
+                        .anchor(0.5f, 0.5f)
+                        .zIndex(10f),
+                )
+            } else {
+                existing.position = navTarget
+                existing.setIcon(iconDesc)
+                existing.rotation = rot
+                existing.isVisible = true
+            }
+        } else {
             userNavMarker?.remove()
             userNavMarker = null
         }
@@ -1787,6 +1872,16 @@ private fun GoogleMapsOfficialEngine(
                     map.isTrafficEnabled = isTrafficEnabled
                     map.mapType = if (isSatellite) GoogleMap.MAP_TYPE_HYBRID else GoogleMap.MAP_TYPE_NORMAL
 
+                    map.setOnCameraMoveStartedListener { reason ->
+                        if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
+                            onUserGesture()
+                        }
+                    }
+                    map.setOnCameraIdleListener {
+                        val target = map.cameraPosition.target
+                        onCameraCenterChanged(target)
+                    }
+
                     val h = mapView.height
                     if (h > 0) {
                         val topPadding = (h * 0.54f).toInt()
@@ -1822,6 +1917,19 @@ private fun GoogleMapsOfficialEngine(
                         .tilt(if (bearing > 0f) 25f else 0f)
                         .build()
                     map.moveCamera(GmsCameraUpdateFactory.newCameraPosition(initialCamera))
+
+                    if (userLocation != null && userNavMarker == null) {
+                        val iconBmp = createLocationDotBitmap(context)
+                        val iconDesc = BitmapDescriptorFactory.fromBitmap(iconBmp)
+                        userNavMarker = map.addMarker(
+                            GmsMarkerOptions()
+                                .position(startPos)
+                                .icon(iconDesc)
+                                .flat(true)
+                                .anchor(0.5f, 0.5f)
+                                .zIndex(10f),
+                        )
+                    }
                 }
                 mapView
             },
@@ -1843,16 +1951,10 @@ private fun getStyleJson(isDark: Boolean, isSatellite: Boolean, isTraffic: Boole
     }
 }
 
-private fun setupMapLibreStyleLayers(style: MlStyle, context: Context) {
-    if (style.getImage(ICON_NAV_ARROW) == null) {
-        style.addImage(ICON_NAV_ARROW, createNavArrowBitmap(context))
-    }
-    if (style.getImage(ICON_LOCATION_DOT) == null) {
-        style.addImage(ICON_LOCATION_DOT, createLocationDotBitmap(context))
-    }
-    if (style.getImage(ICON_DEST_PIN) == null) {
-        style.addImage(ICON_DEST_PIN, createDestinationPinBitmap(context))
-    }
+private fun setupMapLibreStyleLayers(style: MlStyle, context: Context, userLocation: GeoLocation? = null) {
+    style.addImage(ICON_NAV_ARROW, createNavArrowBitmap(context))
+    style.addImage(ICON_LOCATION_DOT, createLocationDotBitmap(context))
+    style.addImage(ICON_DEST_PIN, createDestinationPinBitmap(context))
 
     for (i in 0 until 5) {
         val srcId = "$SOURCE_ALT_ROUTE_PREFIX$i"
@@ -1907,19 +2009,45 @@ private fun setupMapLibreStyleLayers(style: MlStyle, context: Context) {
             PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
             PropertyFactory.iconAllowOverlap(true),
             PropertyFactory.iconIgnorePlacement(true),
+            PropertyFactory.iconOptional(false),
         )
         style.addLayer(layer)
     }
 
     if (style.getSource(SOURCE_VEHICLE) == null) {
-        style.addSource(GeoJsonSource(SOURCE_VEHICLE))
+        val initialGeoJson = if (userLocation != null) {
+            Feature.fromGeometry(Point.fromLngLat(userLocation.longitude, userLocation.latitude))
+        } else {
+            FeatureCollection.fromFeatures(emptyList())
+        }
+        style.addSource(GeoJsonSource(SOURCE_VEHICLE, initialGeoJson))
+    } else if (userLocation != null) {
+        (style.getSource(SOURCE_VEHICLE) as? GeoJsonSource)?.setGeoJson(
+            Feature.fromGeometry(Point.fromLngLat(userLocation.longitude, userLocation.latitude))
+        )
     }
+
+    if (style.getLayer(LAYER_VEHICLE_CIRCLE) == null) {
+        val circleLayer = CircleLayer(LAYER_VEHICLE_CIRCLE, SOURCE_VEHICLE).withProperties(
+            PropertyFactory.circleColor("#1A73E8"),
+            PropertyFactory.circleRadius(10f),
+            PropertyFactory.circleStrokeColor("#FFFFFF"),
+            PropertyFactory.circleStrokeWidth(2.5f),
+            PropertyFactory.circleOpacity(0.35f),
+            PropertyFactory.circlePitchAlignment(Property.CIRCLE_PITCH_ALIGNMENT_MAP),
+        )
+        style.addLayer(circleLayer)
+    }
+
     if (style.getLayer(LAYER_VEHICLE) == null) {
         val layer = SymbolLayer(LAYER_VEHICLE, SOURCE_VEHICLE).withProperties(
             PropertyFactory.iconImage(ICON_LOCATION_DOT),
             PropertyFactory.iconAllowOverlap(true),
             PropertyFactory.iconIgnorePlacement(true),
+            PropertyFactory.iconOptional(false),
+            PropertyFactory.iconKeepUpright(false),
             PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_VIEWPORT),
+            PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_VIEWPORT),
         )
         style.addLayer(layer)
     }

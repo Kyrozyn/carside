@@ -70,7 +70,15 @@ class FusedLocationDataSource(context: Context) : LocationProvider {
         }
 
         runCatching {
-            locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let { emitLocation(it) }
+            val providers = listOf(
+                LocationManager.GPS_PROVIDER,
+                LocationManager.NETWORK_PROVIDER,
+                LocationManager.PASSIVE_PROVIDER,
+            )
+            val bestLast = providers.mapNotNull { p ->
+                runCatching { locationManager?.getLastKnownLocation(p) }.getOrNull()
+            }.maxByOrNull { it.time }
+            if (bestLast != null) emitLocation(bestLast)
         }
 
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
@@ -96,6 +104,15 @@ class FusedLocationDataSource(context: Context) : LocationProvider {
                 locationManager.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
                     500L,
+                    0f,
+                    gpsListener,
+                    Looper.getMainLooper(),
+                )
+            }
+            if (locationManager?.allProviders?.contains(LocationManager.NETWORK_PROVIDER) == true) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER,
+                    1_000L,
                     0f,
                     gpsListener,
                     Looper.getMainLooper(),
